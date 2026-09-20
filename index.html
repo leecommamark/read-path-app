@@ -1,0 +1,306 @@
+<!doctype html>
+<!-- zh-Hant-HK, not en, and it is not cosmetic. Where none of the faces in
+     app.css's CJK stack exist — Android — matching reaches sans-serif and
+     Noto Sans CJK picks its regional variant from the document language, so
+     "en" gets a learner mainland or Japanese glyph forms in an app whose
+     subject is the glyphs. The English chrome below carries lang="en" on the
+     blocks where a screen reader would otherwise read English in a Cantonese
+     voice. (Plan 8 Phase 4; a bundled subsetted HK face is the complete fix
+     and is deferred to plan 9 with the rest of the shipped budget.) -->
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Read Path</title>
+<link rel="stylesheet" href="app.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#06529c">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body>
+
+<!-- The first-run screen (plan 9 Phase 7). Copy verbatim from
+     FIRST_RUN_CONTENT.md; a phase may not reword it. Shown once, on an empty
+     store, and afterwards reachable from the "How it works" link below. -->
+<div id="howitworks" style="display:none" lang="en">
+  <h1>How Read Path works</h1>
+  <p class="intro">You already speak Cantonese. Read Path teaches you to read
+    it, using texts you choose.</p>
+  <ol class="steps">
+    <li><b>Find your level</b><br>Already read some characters? Take the
+      placement test first, so Read Path skips what you know. It takes a few
+      minutes.</li>
+    <li><b>Add a text</b><br>Paste anything: a message, a menu, a news story.
+      It stays on your phone.</li>
+    <li><b>Calibrate</b><br>Tap the characters you already know. Known
+      characters carry over to every text.</li>
+    <li><b>Learn</b><br>Meet five new characters at a time, the most useful
+      first, then get quizzed on them straight away. Review covers everything
+      in the text you haven't learned yet.</li>
+    <li><b>Reader</b><br>Read your text with jyutping over only the characters
+      you haven't learned. As you learn, the jyutping disappears.</li>
+    <li><b>Due today</b><br>A short daily review, across all your texts, so
+      characters stick.</li>
+  </ol>
+  <p>Your progress is stored only on this phone.</p>
+  <p>Add Read Path to your home screen — on iPhone, Share then "Add to Home
+    Screen"; on Android, the menu. It opens like an app, works with no signal
+    at all, and is the safest place for your progress to live.</p>
+  <p>Wherever you run it, use "Export progress" now and then. It is the only
+    real backup.</p>
+  <p class="firstrun-actions">
+    <button id="introPlacement" class="primary">Take the placement test</button>
+    <button id="introSkip">I can't read any characters yet</button>
+  </p>
+</div>
+
+<div id="library">
+  <h1 lang="en">Read Path — Cantonese, in the order that pays</h1>
+  <p><button id="toChars">My characters &amp; placement test</button>
+    <button id="toDue">Due today</button>
+    <button id="exportProgress">Export progress</button>
+    <button id="importProgress">Import</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none">
+    <button id="toIntro" class="linkish">How it works</button></p>
+  <p id="storeWarn" class="error" style="display:none"></p>
+  <div id="textlist"></div>
+  <!-- shown only while the library is empty (plan 9 Phase 7) -->
+  <p id="emptyActions" style="display:none" lang="en">
+    <button id="trySample" class="primary">Try the sample text</button>
+    <button id="addOwn">Add my own text</button>
+  </p>
+  <h2 lang="en">Add a text</h2>
+  <textarea id="newText" placeholder="Paste a text — anything in Chinese characters. Blank lines separate sections."></textarea>
+  <p>
+    <button id="pickFile">Choose files…</button>
+    <input type="file" id="textFile" multiple accept=".txt,.md,.lrc,text/plain,text/markdown" style="display:none">
+    <span class="hint">.txt, .md or .lrc — read in your browser, never uploaded.
+      Pick several at once and they import one after another.</span>
+  </p>
+  <!-- the batch panel: one file at a time, with a running count, a cancel that
+       leaves what has already landed, and a line per file saying what happened
+       to it. Hidden until a batch runs. -->
+  <div id="bulk" style="display:none">
+    <p id="bulkProgress"></p>
+    <p><button id="bulkCancel" class="linkish">Cancel</button>
+       <button id="bulkDone" class="linkish" style="display:none">Close</button></p>
+    <div id="bulkLog"></div>
+  </div>
+  <div id="preview" style="display:none">
+    <input type="text" id="newTitle" placeholder="Title">
+    <input type="text" id="newSource" placeholder="Source (author, site, artist…)">
+    <p class="hint" id="previewMeta"></p>
+    <button id="addText">Add text</button>
+    <button id="cancelImport" class="linkish">Cancel</button>
+  </div>
+
+  <div id="searchBox">
+    <h3 lang="en">Search lyrics</h3>
+    <div style="display:flex; gap:.4rem">
+      <input type="text" id="q" placeholder="Song title (e.g. 海闊天空)">
+      <input type="text" id="qArtist" placeholder="Artist" style="max-width:11rem">
+      <button id="doSearch">Search</button>
+    </div>
+    <p class="hint" lang="en">Lyrics search via lrclib.net (crowd-sourced) — tap a result to
+      preview the lyrics before adding.</p>
+    <div id="results"></div>
+  </div>
+  <div style="margin-top:.4rem"><span id="status"></span></div>
+</div>
+
+<div id="charscreen" style="display:none">
+  <div id="texthead-chars" style="display:flex; align-items:center; gap:.8rem">
+    <button id="charsBack">← texts</button>
+    <h1 lang="en" style="flex:1">Your characters</h1>
+  </div>
+  <div id="placement">
+    <b>Placement test</b>
+    <p class="hint" lang="en">Seven levels of 2–3 quick questions homing in on how far
+      down the learning order you can read — each level moves on the majority,
+      so one slip won't sink the estimate. Don't guess: "I don't know this one"
+      counts as a miss, same as a wrong answer. At the end you choose whether to
+      apply it.</p>
+    <button id="ptStart">Start placement test</button>
+    <div id="ptQuiz" style="display:none">
+      <div id="ptProgress" class="hint"></div>
+      <div id="ptChar"></div>
+      <div class="choices" id="ptChoices"></div>
+      <div id="ptUnknownWrap"><button id="ptUnknown">I don't know this one</button></div>
+    </div>
+    <div id="ptResult" style="display:none"></div>
+  </div>
+  <p class="hint" lang="en"><span id="charStats"></span> Tap to toggle — green = you can
+    pronounce it. The list is the project's learning order, easiest first.
+    <button id="deselectAll" style="margin-left:.6rem">Deselect all</button></p>
+  <div id="charTokens"></div>
+</div>
+
+<div id="due" style="display:none">
+  <div style="display:flex; align-items:center; gap:.8rem">
+    <button id="dueBack">← texts</button>
+    <h1 lang="en" style="flex:1">Due for review</h1>
+  </div>
+  <p class="hint" lang="en" id="dueStats"></p>
+  <div id="dueQuizSlot"></div>
+  <div id="dueDone" class="donemsg" style="display:none">
+    Nothing due right now — come back tomorrow 🌱</div>
+</div>
+
+<div id="text" style="display:none">
+  <div id="texthead">
+    <button id="back">← texts</button>
+    <h1 id="textTitle"></h1>
+    <span id="textBadge" class="s-badge" style="display:none"
+      title="source text was simplified — shown in traditional">簡</span>
+  </div>
+  <div id="meter"><div id="meterFill"></div><div id="meterText"></div></div>
+  <nav>
+    <button data-mode="calibrate">Calibrate</button>
+    <button data-mode="learn">Learn</button>
+    <button data-mode="review">Review</button>
+    <button data-mode="reader">Reader</button>
+  </nav>
+
+  <div id="calibrate">
+    <p class="hint" lang="en">New characters in this text. Tap any you can already
+      pronounce — they skip the Learn queue. (Characters you know from other
+      texts are filtered out already.)</p>
+    <div class="hint" id="calNorm" style="display:none"></div>
+    <div id="calTokens"></div>
+    <div id="prereqBox" style="display:none">
+      <h3 lang="en">Worth meeting first</h3>
+      <p class="hint" lang="en">Building blocks of the characters above — components and
+        sound parts that are characters in their own right, aren't in this
+        text, and you don't know yet. Learning one pays off across all the
+        characters it appears in.</p>
+      <div id="prereqList"></div>
+    </div>
+    <p><button id="toLearn">Start learning →</button></p>
+  </div>
+
+  <div id="learn" style="display:none">
+    <div id="learnPhase" class="hint" style="text-align:center"></div>
+    <div id="learnCard"></div>
+    <div id="learnNav" style="text-align:center; margin:.8rem 0">
+      <button id="lPrev">← Prev</button>
+      <span id="lPos" style="margin:0 .8rem; color:#888; font-size:.85rem"></span>
+      <button id="lNext">Next →</button>
+      <div style="margin-top:.6rem">
+        <button id="lKnow">Already know this</button>
+      </div>
+    </div>
+    <div id="learnQuizSlot"></div>
+    <div id="learnDone" class="donemsg" style="display:none">
+      Nothing left to learn in this text 🎉</div>
+  </div>
+
+  <div id="review" style="display:none">
+    <div id="reviewQuizSlot"></div>
+    <div id="reviewDone" class="donemsg" style="display:none">📖 Text ready —
+      every character acquired. Open the Reader and read it through.</div>
+  </div>
+
+  <div id="reader" style="display:none">
+    <div id="readerCtl">
+      <span id="rmSwitch">
+        <button id="rmRead">Read</button><button id="rmMark">Mark</button>
+      </span>
+      <label id="showAllWrap"><input type="checkbox" id="showAllMeanings">
+        Show all meanings</label>
+    </div>
+    <p class="hint" lang="en" id="readerHint"></p>
+    <p class="hint" lang="en" id="readerScript" style="display:none">Shown in
+      traditional; the source was simplified.
+      <label><input type="checkbox" id="asWritten"> as written</label></p>
+    <div id="sectionNav" style="display:none">
+      <button id="secPrev">←</button>
+      <span id="secLabel"></span>
+      <button id="secNext">→</button>
+    </div>
+    <div id="lines"></div>
+    <div id="sectionNavFoot" style="display:none">
+      <button id="secPrevFoot">← previous section</button>
+      <button id="secNextFoot">next section →</button>
+    </div>
+  </div>
+
+  <!-- shared quiz component; moved into learnQuizSlot / reviewQuizSlot / dueQuizSlot -->
+  <div id="quizbox" style="display:none">
+    <div id="qprogress"></div>
+    <div id="qword"></div>
+    <div class="choices" id="qchoices"></div>
+    <div id="feedback" style="display:none"></div>
+    <button id="qnext" style="display:none">Continue</button>
+  </div>
+</div>
+
+<div id="toast" style="display:none">
+  <span id="toastMsg"></span><button id="toastUndo">Undo</button>
+</div>
+
+<!-- plain scripts, no bundler: load order is explicit and matters only for
+     the top-level initializers (reader.js reads store.js's load()). Every
+     handler runs after all of them, so cross-file calls are free.
+     features.js is first: its FEATURES consts may be read at load time, and
+     mode.js beside it: BUILD_MODE decides which side of the analysis seam
+     library.js and chars.js take, and build_dist.py rewrites that one file
+     in dist/. The analysis/ group is the on-device analyser (plan 9); it
+     defines only ANALYSIS and buildPage, executes nothing at load time, and
+     is inert in a server build. -->
+<script src="js/features.js"></script>
+<script src="js/mode.js"></script>
+<script src="js/analysis/util.js"></script>
+<script src="js/analysis/tables.js"></script>
+<script src="js/analysis/normalize.js"></script>
+<script src="js/analysis/resources.js"></script>
+<script src="js/analysis/cards.js"></script>
+<script src="js/analysis/readings.js"></script>
+<script src="js/analysis/analyse.js"></script>
+<script src="js/analysis/assemble.js"></script>
+<script src="js/analysis/buildpage.js"></script>
+<script src="js/analysis/provider.js"></script>
+<script src="js/store.js"></script>
+<script src="js/lrc.js"></script>
+<script src="js/library.js"></script>
+<script src="js/chars.js"></script>
+<script src="js/due.js"></script>
+<script src="js/text.js"></script>
+<script src="js/calibrate.js"></script>
+<script src="js/cardview.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/learn.js"></script>
+<script src="js/reader.js"></script>
+<!-- the store is IndexedDB behind a cache since plan 8 Phase 2, so the boot
+     waits on one hydrate: it opens the database, runs the one-time move out
+     of localStorage, and fills the cache with what the library list needs -->
+<script>
+  // A device build has one more thing to do before the library draws: fetch
+  // the resident tables and, on a first run, import the keyed ones. The
+  // store's own plumbing is handed in rather than reached for, so the
+  // analyser stays ignorant of how the app stores things.
+  hydrate()
+    .then(() => BUILD_MODE === 'device'
+      ? ANALYSIS.installBrowserTables({get: dbGetMany, put: dbPutMany})
+      : null)
+    .then(() => { rebuildKnown(); firstRunOrLibrary(); });
+
+  // The shell (plan 9 Phase 6). Registered relative, so the worker scopes to
+  // wherever the app is served rather than to the origin root — a project
+  // page serves from a subdirectory and plan 10 wraps this same folder.
+  // Server builds register it too: the dev loop is the only place the shell
+  // can be exercised before it ships, and /api/* is exempted inside sw.js.
+  if ('serviceWorker' in navigator)
+    addEventListener('load', () => navigator.serviceWorker.register('./sw.js')
+      .catch(e => console.warn('service worker did not register', e)));
+
+  // Ask for the bucket to be durable. Plan 8 measured this refused on the
+  // browser to hand, and the store is best-effort either way — Export is
+  // still the backup — but an installed app is a likelier yes than a tab,
+  // and it costs one call. Phase 6 records the answer per device (p9-20).
+  if (navigator.storage && navigator.storage.persist)
+    navigator.storage.persist().then(
+      ok => console.log('storage.persist():', ok),
+      () => {});
+</script>
+</body>
+</html>

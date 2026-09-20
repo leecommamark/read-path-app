@@ -1,0 +1,27 @@
+{
+  "name": "Read Path",
+  "short_name": "Read Path",
+  "description": "Cantonese, in the order that pays. Your own texts, on your phone, offline.",
+  "lang": "zh-Hant-HK",
+  "dir": "ltr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#06529c",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

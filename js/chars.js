@@ -1,0 +1,151 @@
+// chars.js — the Characters screen: the standalone learning-order list and
+// the binary-search placement test.
+// ---------- characters screen + placement test ----------
+$('toChars').onclick = () => openChars();
+$('charsBack').onclick = () => renderLibrary();
+
+async function openChars() {
+  show('charscreen');
+  if (!charlist) {
+    $('charStats').textContent = 'Loading the learning order…';
+    // the same stamp as `analyse`: shipped table or server, never a probe.
+    // The shipped table is the same rows GET /api/charlist answers with,
+    // built from output/order.csv by tools/build_dist.py.
+    charlist = BUILD_MODE === 'device'
+      ? ANALYSIS.tables().charlist.map(
+          r => ({char: r[0], rank: r[1], reading: r[2], gloss: r[3]}))
+      : await (await fetch('api/charlist')).json();
+  }
+  renderCharList();
+}
+
+function renderCharList() {
+  $('charStats').textContent =
+    `${knownChars.size} known of ${charlist.length} in the learning order.`;
+  $('charTokens').innerHTML = charlist.map(c => `
+    <span class="token${isKnownChar(c.char) ? ' known' : ''}" data-char="${esc(c.char)}"
+      data-jp="${esc(c.reading || '')}"
+      title="#${c.rank} ${esc(c.reading || '?')} — ${esc(c.gloss || '')}">${esc(c.char)}</span>`).join('');
+}
+$('deselectAll').onclick = () => {
+  const n = Object.keys(cards).length;
+  if (!n) return;
+  if (!confirm(`Delete all ${n} review cards? This wipes the SRS schedule for every text.`)) return;
+  cards = {};
+  saveCards();
+  renderCharList();
+};
+$('charTokens').onclick = e => {              // delegated: 3,000 tokens
+  const el = e.target.closest('.token');
+  if (!el) return;
+  const ch = el.dataset.char;
+  if (isKnownChar(ch)) {                      // off = forget every reading of it
+    for (const k of cardsOf(ch)) delete cards[k];
+    saveCards();
+  } else if (el.dataset.jp) {                 // on = its primary reading, mature
+    mintCard(keyOf(ch, el.dataset.jp), MATURE_RUNG);
+  }
+  el.classList.toggle('known', isKnownChar(ch));
+  $('charStats').textContent =
+    `${knownChars.size} known of ${charlist.length} in the learning order.`;
+};
+
+// placement: binary search on the learning-order frontier, but forgiving —
+// each level asks up to 3 characters from the same band and moves on the
+// majority (first two answers agreeing skip the third), so one careless tap
+// or one unlucky rare character can't halve the estimate on its own.
+// "I don't know this one" is an explicit miss: with four choices a guess is
+// right a quarter of the time, which pushes the frontier estimate too far
+// down the order, so the honest answer gets its own button.
+let pt = null;   // {lo, hi, level, levelResults, results: [{char, right}]}
+const PT_LEVELS = 7;
+
+$('ptStart').onclick = () => {
+  pt = {lo: 0, hi: charlist.length, level: 0, levelResults: [], results: []};
+  $('ptStart').style.display = 'none'; $('ptResult').style.display = 'none';
+  $('ptQuiz').style.display = '';
+  askPlacement();
+};
+
+function askPlacement() {
+  if (pt.level >= PT_LEVELS || pt.hi - pt.lo < 20) return finishPlacement();
+  const mid = Math.floor((pt.lo + pt.hi) / 2);
+  const band = charlist.slice(Math.max(0, mid - 40), mid + 40)
+    .filter(c => c.reading && !pt.results.some(r => r.char === c.char));
+  const c = band[Math.floor(Math.random() * band.length)];
+  if (!c) return finishPlacement();
+  pt.cur = {c, mid};
+  $('ptProgress').textContent =
+    `Level ${pt.level + 1} of ${PT_LEVELS}, question ${pt.levelResults.length + 1} — how is this pronounced?`;
+  $('ptChar').textContent = c.char;
+  const pool = shuffle(charlist.filter(x => x.reading && x.reading !== c.reading)
+    .map(x => x.reading));
+  const choices = shuffle([c.reading, ...[...new Set(pool)].slice(0, 3)]);
+  $('ptChoices').innerHTML = choices.map(r =>
+    `<button data-r="${esc(r)}">${esc(r)}</button>`).join('');
+  document.querySelectorAll('#ptChoices button').forEach(b => b.onclick = () =>
+    answerPlacement(b.dataset.r === pt.cur.c.reading));
+}
+
+// one answer, however it arrived — a chosen jyutping or "I don't know this
+// one" (always a miss, and it lapses the character's cards like any other
+// wrong answer does, in applyPtResults below)
+function answerPlacement(right) {
+  if (!pt || !pt.cur) return;
+  pt.results.push({char: pt.cur.c.char, right});
+  pt.levelResults.push(right);
+  const wins = pt.levelResults.filter(Boolean).length;
+  const losses = pt.levelResults.length - wins;
+  if (wins === 2 || losses === 2) {             // majority settled
+    wins === 2 ? pt.lo = pt.cur.mid : pt.hi = pt.cur.mid;
+    pt.level++;
+    pt.levelResults = [];
+  }
+  askPlacement();
+}
+$('ptUnknown').onclick = () => answerPlacement(false);
+
+function finishPlacement() {
+  pt.cur = null;                                // no stray answer after the end
+  $('ptQuiz').style.display = 'none';
+  const n = pt.lo;
+  const nRight = pt.results.filter(r => r.right).length;
+  $('ptResult').style.display = '';
+  $('ptResult').innerHTML = `
+    <p>${nRight}/${pt.results.length} correct. Estimated frontier: you can read
+    roughly the first <b>${n}</b> characters of the learning order.</p>
+    <button id="ptApply">Mark the first ${n} as known</button>
+    <button id="ptRetry">Retry</button>
+    <p class="hint">Characters you answered wrong go back for review either way;
+    right answers are marked known either way.</p>`;
+  $('ptApply').onclick = () => {
+    for (const c of charlist.slice(0, n))
+      if (c.reading && !isKnownChar(c.char))    // never downgrade an existing card
+        cards[keyOf(c.char, c.reading)] = newCard(MATURE_RUNG);
+    saveCards();
+    applyPtResults(); renderCharList();
+    $('ptResult').style.display = 'none'; $('ptStart').style.display = '';
+  };
+  $('ptRetry').onclick = () => { applyPtResults(); $('ptStart').click(); };
+  applyPtResults();
+
+  function applyPtResults() {
+    // right = enter at the mature rung (if not already carded); wrong = a
+    // lapse of whatever cards exist — never a deletion, scheduling history
+    // survives a bad day
+    const now = Date.now();
+    for (const r of pt.results) {
+      if (r.right) {
+        const cl = charlist.find(c => c.char === r.char);
+        if (cl?.reading && !isKnownChar(r.char))
+          cards[keyOf(r.char, cl.reading)] = newCard(MATURE_RUNG);
+      } else {
+        for (const k of cardsOf(r.char)) {
+          const c = cards[k];
+          c.rung = 0; c.due = now; c.last = now; c.lapses++;
+        }
+      }
+    }
+    saveCards();
+  }
+}

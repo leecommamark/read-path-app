@@ -1,0 +1,188 @@
+// cardview.js — the pieces the learn card and the quiz feedback card share:
+// the text's own words, the dictionary example words, the reading's
+// line, one per-reading section, and the mnemonic block (formation caption,
+// decomposition tree, cousin line, series dropdowns).
+// the text's own words — dictionary examples repeating them are filtered
+// out client-side (the server mirrors this for gloss derivation)
+const _pageWords = new WeakMap();
+function textWordSet() {
+  if (!page) return new Set();
+  let s = _pageWords.get(page);
+  if (!s) {
+    s = new Set();
+    for (const l of page.lines) if (!l.blank)
+      for (const p of l.parts) if (p.type === 'word') s.add(p.word);
+    _pageWords.set(page, s);
+  }
+  return s;
+}
+// first 3 dictionary example candidates not among the text's own words
+function dictExamples(r) {
+  const sw = textWordSet();
+  return (r.examples || []).filter(e => !sw.has(e.word)).slice(0, 3);
+}
+
+// the mnemonic block: formation-type caption + decomposition tree. Shown on
+// the learn card and the quiz feedback card.
+const FORMATION_NAMES = {
+  phonosemantic: '<b>形聲</b> sound + meaning',
+  ideographic: '<b>會意</b> meaning parts combined',
+  pictogram: '<b>象形</b> a picture of the thing',
+  ideogram: '<b>指事</b> an abstract sign',
+  loan: '<b>假借</b> borrowed for its sound',
+  simplified: 'simplified form',
+};
+function mnemonicBlock(c) {
+  const cap = FORMATION_NAMES[c.type];
+  const tree = decompTree(c.decomp);
+  if (!cap && !tree) return '';
+  // a caption alone (象形/指事 — nothing to decompose) still earns its line
+  return `${cap ? `<div class="dt-caption">${cap}</div>` : ''}${tree}${cousinLine(c)}`;
+}
+
+// Only when the server sent cousins: the phonetic's own reading is no clue to
+// this character's sound, so name the series members that are — "like 黨 dong2
+// · 堂 tong4". Absent whenever the bold pick is close enough to stand alone.
+function cousinLine(c) {
+  if (!c.cousins || !c.cousins.length) return '';
+  return `<div class="dt-cousins">like ` + c.cousins.map(x =>
+    `<b>${esc(x.char)}</b> ${esc(x.jp)}`).join('<span class="n-sep">·</span>')
+    + `</div>`;
+}
+
+// decomposition tree, one row per level: level-1 components side by side,
+// their components (if any) on the next row, etc. Phonetic components purple
+// with their jyutping; 會意 components and the semantic side of a 形聲
+// character carry their curated role-gloss (cgloss) — never a dictionary gloss.
+// Under a 形聲 parent each component is labelled with its role (sound/meaning).
+function decompTree(d) {
+  if (!d || !d.children || !d.children.length) return '';
+  const rows = [];
+  let level = d.children.map(k => ({n: k, parent: d}));
+  while (level.length) {
+    rows.push(level);
+    level = level.flatMap(({n}) => (n.children || []).map(k => ({n: k, parent: n})));
+  }
+  return rows.map(row => `<div class="dt-row">` + row.map(({n, parent}) => {
+    const isPhon = n.char === parent.phonetic;
+    const rs = isPhon ? (n.readings || (n.jp ? [n.jp] : [])) : [];
+    const jp = rs.length ? `<span class="n-jp">` + rs.map(r =>
+      r === (n.best || rs[0]) ? `<b>${esc(r)}</b>` : `<span class="n-alt">${esc(r)}</span>`)
+      .join('<span class="n-sep">·</span>') + `</span>` : '';
+    const gloss = n.cgloss && (parent.type === 'ideographic' ||
+          (parent.phonetic && n.char !== parent.phonetic))
+      ? `<span class="n-gloss">${esc(n.cgloss)}</span>` : '';
+    const role = parent.type === 'phonosemantic' && parent.phonetic
+      ? `<span class="n-role${isPhon ? ' sound' : ''}">${isPhon ? 'sound' : 'meaning'}</span>`
+      : '';
+    return `<span class="dt-node${isPhon ? ' phon' : ''}">
+      ${role}<span class="n-char">${esc(n.char)}</span>${jp}${gloss}</span>`;
+  }).join('') + `</div>`).join('');
+}
+
+// optional enrichment: two dropdowns — characters sharing the phonetic
+// component, and characters that take THIS character as their phonetic
+function seriesRows(list) {
+  return list.map(s => {
+    const inText = s.char in info;
+    return `<div class="sr${inText ? ' intext' : ''}"><b>${esc(s.char)}</b>
+      <span class="sr-jp">${esc(s.jp || '?')}</span>${esc(s.gloss || '')}${inText ? ' — in this text' : ''}</div>`;
+  }).join('');
+}
+
+function seriesBlock(c) {
+  let out = '';
+  const phonNode = (c.decomp?.children || []).find(k => k.char === c.decomp.phonetic);
+  const sibs = phonNode?.series || [];
+  if (sibs.length) {
+    const label = phonNode.series_root
+      ? `${sibs.length} characters in the wider ${esc(phonNode.series_root)} sound family`
+      : `${sibs.length} other characters with phonetic ${esc(c.decomp.phonetic)}`;
+    out += `<details class="lc-series"><summary>${label}</summary>
+      ${seriesRows(sibs)}</details>`;
+  }
+  const derived = c.derived || [];
+  if (derived.length)
+    out += `<details class="lc-series">
+      <summary>${derived.length} characters take ${esc(c.char)} as their phonetic</summary>
+      ${seriesRows(derived)}</details>`;
+  return out;
+}
+
+// the reading's line from the text, in reader card markup: jyutping above unacquired
+// only (same predicate as the Reader), the target character highlighted.
+// A long line clips to the clause around the target, cuts marked with an
+// ellipsis. Glyphs follow the text's "as written" toggle like the quiz words
+// — except in the Due deck (`due`), which always shows traditional
+// (DESIGN.md).
+//
+// Sentence enders count as delimiters, not just the comma-ish ones (plan 4
+// Phase 4). A lyric line is one clause and never needed them; pasted prose
+// arrives as a paragraph on a single line, where searching only for ，、
+// walks straight through 。 and hands the card a 31-character run-on of
+// three sentences. With enders in, the same card clips to 11.
+const CLAUSE_SEP = /[　 ，、,。！？；：!?;:]/;
+const CLIP_LEN = 14;
+function contextLineHtml(r, due) {
+  const l = r.line && page && page.lines[r.line.i];
+  if (!l || l.blank) return '';
+  const aw = !due && curText()?.asWritten;
+  // flatten to per-character cells — offsets match the server's pos
+  const cells = [];
+  for (const p of l.parts) {
+    if (p.type === 'word')
+      for (const c of p.chars)
+        cells.push({ch: aw && c.src ? c.src : c.char, char: c.char, jp: c.jp});
+    else
+      for (const t of p.text) cells.push({ch: t, text: true});
+  }
+  const pos = r.line.pos;
+  let start = 0, end = cells.length;
+  if (cells.length > CLIP_LEN) {
+    for (let i = pos - 1; i >= 0; i--)
+      if (cells[i].text && CLAUSE_SEP.test(cells[i].ch)) { start = i + 1; break; }
+    for (let i = pos + 1; i < cells.length; i++)
+      if (cells[i].text && CLAUSE_SEP.test(cells[i].ch)) { end = i; break; }
+  }
+  const html = cells.slice(start, end).map((c, k) => {
+    if (c.text) return `<span class="plain">${esc(c.ch)}</span>`;
+    const known = isKnownKey(c.char, cardJp(info[c.char], c.jp));
+    return `<span class="card${known ? ' known' : ''}${start + k === pos ? ' target' : ''}">
+      <span class="c-jp">${esc(c.jp || '')}</span>
+      <span class="c-char">${esc(c.ch)}</span></span>`;
+  }).join('');
+  return `<div class="lc-line">${start > 0 ? '<span class="plain">…</span>' : ''}${html}${end < cells.length ? '<span class="plain">…</span>' : ''}</div>`;
+}
+
+// one per-reading section — the learn card shows every reading, the quiz
+// feedback card just the answered one. gloss → dictionary words → the
+// line, each of the last two under its own label: unlabelled, a row of
+// Chinese was ambiguous — the words and the line read alike. Words come
+// first so the line, the hook the learner already knows, sits closest to the
+// mnemonic block below. 變調 variants live inside their base reading's
+// section (their word evidence still comes from in_text — a variant has no
+// line of its own on the card).
+function readingSection(cur, r, c, due) {
+  const all = c.readings || [];
+  const words = dictExamples(r).map(e =>
+    `<span class="lc-w">${esc(e.word)} <span class="lc-exjp">${esc(e.jp)}</span></span>`).join('');
+  const intextWord = w =>
+    `<span class="intext">${esc(w.word)}</span> <span class="lc-exjp">${esc(w.jp)}</span>`;
+  const vars = all.filter(v => v.variant_of === r.jp).map(v => {
+    const ws = v.in_text?.length
+      ? v.in_text.map(intextWord).join('　')
+      : v.examples?.[0]
+        ? `${esc(v.examples[0].word)} <span class="lc-exjp">${esc(v.examples[0].jp)}</span>`
+        : '';
+    return `<div class="lc-var">變調 <span class="lc-exjp">${esc(v.jp)}</span>${ws ? ` in ${ws}` : ''}</div>`;
+  }).join('');
+  const line = contextLineHtml(r, due);
+  return `<div class="lc-reading${r.jp === cur.jp ? ' own' : ''}">
+    <div class="lc-jp">${esc(r.jp || '?')}</div>
+    <div class="lc-gloss">${esc(r.gloss || '')}</div>
+    ${words ? `<div class="lc-label">Words using it</div>
+               <div class="lc-words">${words}</div>` : ''}
+    ${line ? `<div class="lc-label">In the text</div>${line}` : ''}
+    ${vars}
+  </div>`;
+}
