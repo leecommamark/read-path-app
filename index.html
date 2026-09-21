@@ -42,8 +42,8 @@
       in the text you haven't learned yet.</li>
     <li><b>Reader</b><br>Read your text with jyutping over only the characters
       you haven't learned. As you learn, the jyutping disappears.</li>
-    <li><b>Due today</b><br>A short daily review, across all your texts, so
-      characters stick.</li>
+    <li><b>Daily review</b><br>A few minutes across all your texts, so what
+      you have learned stays learned.</li>
   </ol>
   <p>Your progress is stored only on this phone.</p>
   <p>Add Read Path to your home screen — on iPhone, Share then "Add to Home
@@ -60,7 +60,7 @@
 <div id="library">
   <h1 lang="en">Read Path — Cantonese, in the order that pays</h1>
   <p><button id="toChars">My characters &amp; placement test</button>
-    <button id="toDue">Due today</button>
+    <button id="toDue">Daily review</button>
     <button id="exportProgress">Export progress</button>
     <button id="importProgress">Import</button>
     <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -141,12 +141,15 @@
 <div id="due" style="display:none">
   <div style="display:flex; align-items:center; gap:.8rem">
     <button id="dueBack">← texts</button>
-    <h1 lang="en" style="flex:1">Due for review</h1>
+    <h1 lang="en" style="flex:1">Daily review</h1>
   </div>
   <p class="hint" lang="en" id="dueStats"></p>
   <div id="dueQuizSlot"></div>
+  <!-- the second line is written by due.js: for a placed-out learner the
+       deck is empty for weeks, and "nothing due" without a date reads as a
+       broken screen rather than a finished one -->
   <div id="dueDone" class="donemsg" style="display:none">
-    Nothing due right now — come back tomorrow 🌱</div>
+    Nothing due right now.</div>
 </div>
 
 <div id="text" style="display:none">

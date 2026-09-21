@@ -441,7 +441,8 @@ function meaningForBatch(upcoming, n) {
 // pathbuilder.SEMANTIC_FIELDS order and nothing on the device reads it by
 // name until here), so this is the one place that knows the slot order.
 const SEMANTIC_FIELDS = ['component', 'full_form', 'meaning', 'reliability',
-                         'note', 'value', 'marks', 'examples'];
+                         'note', 'value', 'marks', 'examples', 'distractors',
+                         'asks'];
 function semanticOf(ch) {
   const row = MEANING && Array.isArray(MEANING.semantic)
     && MEANING.semantic.find(r => r[0] === ch);

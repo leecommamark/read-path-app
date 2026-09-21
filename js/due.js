@@ -25,6 +25,52 @@ function dueMeaningKeys() {
     .sort((a, b) => cards[a].due - cards[b].due);
 }
 
+// ---------- what is in the deck, and when the next one lands ----------
+// A count alone does not tell a placed-out learner why their deck is 92
+// tell-apart questions and no characters, and "nothing due" with no date
+// reads as a broken screen rather than a finished one. Both are the same
+// fix: say what the ladder is actually doing.
+const DUE_KINDS = [['character', 'characters'],      // a sound-track key
+                   ['family', 'families'],           // @fam: — tell-apart
+                   ['meaning part', 'meaning parts']];  // @part: — form-of
+function dueBreakdown(keys) {
+  const n = [0, 0, 0];
+  for (const k of keys) n[k.fam ? 1 : k.part ? 2 : 0]++;
+  // a kind with none of its own is left out, never shown as "0 families"
+  return n.map((c, i) => c ? `${c} ${DUE_KINDS[i][c === 1 ? 0 : 1]}` : '')
+          .filter(Boolean).join(' · ');
+}
+
+// The soonest `due` still ahead of us, across BOTH tracks — reduced rather
+// than spread, because a library's card count is in the thousands and
+// Math.min(...keys) is a stack overflow waiting for a big enough learner.
+function nextDueText() {
+  const now = Date.now();
+  let soonest = Infinity;
+  for (const k in cards) if (cards[k].due > now && cards[k].due < soonest)
+    soonest = cards[k].due;
+  if (soonest === Infinity) return '';
+  // CALENDAR days, not elapsed ones. "in 2 days" for something 30 hours off
+  // is arithmetically true and is not what a learner reads it as; the
+  // question they are asking is which morning to come back on. Local
+  // midnight to local midnight, which is also what the ladder's own day
+  // boundaries feel like from the outside.
+  const midnight = t => { const d = new Date(t);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const days = Math.round((midnight(soonest) - midnight(now)) / DAY);
+  return days <= 0 ? 'Your next card falls due later today.'
+       : days === 1 ? 'Your next card falls due tomorrow.'
+       : `Your next card falls due in ${days} days.`;
+}
+
+function showDueDone() {
+  const next = nextDueText();
+  $('dueStats').textContent = '';
+  $('dueDone').innerHTML = 'Nothing due right now.'
+    + (next ? `<br><span class="dd-next">${next}</span>` : '');
+  $('dueDone').style.display = '';
+}
+
 $('toDue').onclick = () => openDue();
 $('dueBack').onclick = () => {
   page = null; info = null; duePageId = null;
@@ -52,22 +98,19 @@ async function openDue() {
     ? {fam: meaningOf(k)} : {part: meaningOf(k)})];
   if (!keys.length) {
     $('quizbox').style.display = 'none';
-    $('dueStats').textContent = '';
-    $('dueDone').style.display = '';
+    showDueDone();
     return;
   }
   $('dueDone').style.display = 'none';
-  $('dueStats').textContent =
-    `${keys.length} card${keys.length > 1 ? 's' : ''} due across your library.`;
+  $('dueStats').innerHTML =
+    `${keys.length} card${keys.length > 1 ? 's' : ''} due across your library.`
+    + `<br><span class="ds-kinds">${dueBreakdown(keys)}</span>`;
   dueIx = texts.map(s => ({id: s.id, ix: loadCov(s.id)})).filter(e => e.ix);
   // the cards for exactly the keys the deck will ask about, and the core and
   // lines of every text it could borrow from
   await warmCards(Object.keys(cards).filter(k => cards[k].due <= Date.now()));
   await warm(dueIx.flatMap(e => ['songpath.page.' + e.id, 'songpath.lines.' + e.id]));
-  startQuiz(keys, 'dueQuizSlot', () => {
-    $('dueStats').textContent = '';
-    $('dueDone').style.display = '';
-  }, true);
+  startQuiz(keys, 'dueQuizSlot', showDueDone, true);
 }
 
 // point page/info at a cached payload that can give this card context —

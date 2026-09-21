@@ -144,7 +144,23 @@ function renderLibrary() {
       : '';
   $('storeWarn').style.display = warn ? '' : 'none';
   $('storeWarn').textContent = warn;
-  $('toDue').textContent = `Due today (${dueKeys().length})`;
+  // BOTH TRACKS. Counting sound keys alone let the button read "Due today
+  // (0)" with 92 families waiting behind it — which is what a placed-out
+  // learner sees, since the placement test mints every sound card at the
+  // mature 30 d rung and the families are due at once (Mark, 2026-09-21).
+  //
+  // And schedule first, or the count is a card behind: a family becomes
+  // quizzable the moment its member is acquired, but nothing notices until a
+  // DOOR runs — and the library is not one. Coming back from a Learn batch,
+  // the button would say 4 and the deck would then hold 6.
+  //
+  // This is a door only when the tables are ALREADY in memory:
+  // scheduleFamilies is a no-op while MEANING is null, so the install stays
+  // behind the paint where plan 9.1 Phase 2 put it, and no await enters the
+  // library's render path.
+  scheduleFamilies();
+  $('toDue').textContent =
+    `Daily review (${dueKeys().length + dueMeaningKeys().length})`;
   $('textlist').innerHTML = texts.length ? texts.map(s => {
     const ix = loadCov(s.id);
     const cov = ix ? coverageOf(ix.chars) + '% readable' : '';
