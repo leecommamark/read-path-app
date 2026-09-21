@@ -93,10 +93,20 @@ var ANALYSIS = ANALYSIS || {};
     for (const n of RESIDENT) resident[n] = await getJSON(n + '.json');
     resident.manifest = manifest;
 
+    // WHAT INVALIDATES THE IMPORT: `manifest.tables`, not `manifest.build`.
+    // `build` covers every shipped byte, so a one-line CSS fix invalidated
+    // this marker and re-imported 26 MB of words, cards and examples that had
+    // not changed — on the first launch after every deploy, with the library
+    // waiting on it, which on a phone on mobile data is the worst moment to
+    // ask for it. `tables` covers the imported files and the contract they are
+    // keyed under (the shard count, the fnv1a pin, a hand-bumped format
+    // number), so it moves when a re-import is genuinely needed and not
+    // otherwise. tools/build_dist.py computes it and refuses to build if it
+    // would be a constant.
     const done = await io.get([MARK]);
-    if (done.get(MARK) !== manifest.build) {
+    if (done.get(MARK) !== manifest.tables) {
       await importKeyed(io.put);
-      await io.put([[MARK, manifest.build]]);
+      await io.put([[MARK, manifest.tables]]);
     }
 
     const warm = async keys => {
