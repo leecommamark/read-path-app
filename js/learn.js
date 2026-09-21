@@ -7,14 +7,23 @@ let batch = [], learnI = 0;
 function startLearn() {
   $('quizbox').style.display = 'none';
   const pool = unacquiredKeys();
-  if (!pool.length) {
+  // The meaning track is GLOBAL: its items belong to no text and surface in
+  // whichever text's batch the learner is in when they fall due. They take
+  // at most MEANING_PER_BATCH of the five — decision C — and they go FIRST,
+  // because the whole timing rule is "introduced just before the family that
+  // needs it", and after the characters is not before them.
+  const sound = pool.slice(0, BATCH - MEANING_PER_BATCH);
+  const parts = meaningForBatch(sound.map(k => k.char), MEANING_PER_BATCH);
+  const rest = pool.slice(0, BATCH - parts.length);
+  if (!pool.length && !parts.length) {
     for (const el of ['learnPhase', 'learnCard', 'learnNav'])
       $(el).style.display = 'none';
     $('learnDone').style.display = '';
     return;
   }
   $('learnDone').style.display = 'none';
-  batch = pool.slice(0, BATCH).map(k => ({char: k.char, jp: k.jp}));
+  batch = [...parts.map(p => ({part: p})),
+           ...rest.map(k => ({char: k.char, jp: k.jp}))];
   learnI = 0;
   renderLearnCard();
 }
@@ -32,6 +41,25 @@ function renderLearnCard() {
     (then > was ? ` They take this text from ${was}% to ${then}% readable.`
                 : ` You can read ${was}% of this text.`);
   const cur = batch[learnI];
+  // A meaning-track item is global — it belongs to no text — so it takes the
+  // early exit before anything reads `info`, which is this text's character
+  // table. Plan 10 Phase 8 decides when one enters a batch; this only draws
+  // what it is handed.
+  if (cur.part) {
+    // Offered means seen, and seen means carded. That is what stops the same
+    // part being offered again from another text — the de-duplication is the
+    // card itself, not a per-session list, so it survives a reload. Rung 0:
+    // first review tomorrow, like any freshly acquired card.
+    if (!cards[partKey(cur.part)]) mintCard(partKey(cur.part), 0);
+    $('learnCard').innerHTML = partCardHtml(semanticOf(cur.part));
+    $('learnPhase').textContent =
+      `Meet these ${batch.length} cards — then a quick quiz on just them.`;
+    $('lPos').textContent = `${learnI + 1} / ${batch.length}`;
+    $('lPrev').disabled = learnI === 0;
+    $('lNext').textContent =
+      learnI === batch.length - 1 ? 'Quiz these →' : 'Next →';
+    return;
+  }
   const c = info[cur.char];
   // Pleco layout: one section per reading, the card's own reading first —
   // each with its line from the text and dictionary words. A single-reading

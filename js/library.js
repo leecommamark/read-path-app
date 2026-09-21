@@ -507,7 +507,7 @@ if (!FEATURES.lyricsSearch) $('searchBox').style.display = 'none';
 // payload schema version, emitted by the server (build_page) — a cached
 // songpath.page.* whose v differs is discarded and re-fetched on open.
 // Keep in sync with PAGE_V in pathbuilder.py.
-const PAGE_V = 15;
+const PAGE_V = 16;
 
 // THE SEAM (patch plan 9 Phase 5). One function, four call sites — the paste
 // box, the batch import, a cache miss in openText, and ensureCards when the

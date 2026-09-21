@@ -29,6 +29,9 @@
     --green-pale: #e6f6e6;
     --green-pale-2: #f3faf3;
     --red: #b00020;         /* errors, delete */
+    --teal: #0f6e6e;        /* the meaning track (plan 10) */
+    --teal-2: #4f9a9a;
+    --teal-pale: #eef6f6;
     --violet: #7a4dbb;      /* the sound column */
     --violet-2: #a58bd0;
     --violet-3: #b9aed4;
@@ -237,6 +240,49 @@
   .lc-jp { font-size: 1.3rem; color: var(--blue); font-weight: 600; }
   .lc-gloss { color: var(--ink-2); margin: .3rem 0 .4rem; }
   #learnCard .lc-count { color: var(--mute-2); font-size: .8rem; margin-top: .5rem; }
+
+  /* the meaning track's card (plan 10 Phase 6). Decision D: the same chrome
+     as a sound-track card — same spacing, same tap targets — with one accent
+     edge and a label, so it reads as a different KIND of the same thing
+     rather than a second design. Nothing here sets a width or a min-width,
+     which is what keeps it honest at 390px. */
+  .mc { border-left: 3px solid var(--teal); padding-left: .7rem; }
+  .mc-label { color: var(--teal); font-size: .75rem; letter-spacing: .04em;
+              text-transform: uppercase; margin-bottom: .2rem; }
+  .mc-char { font-size: 4rem; line-height: 1.2; }
+  .mc-from { color: var(--mute-2); font-size: .85rem; margin: -.2rem 0 .4rem; }
+  .mc-from b { font-size: 1.2rem; color: var(--ink-2); font-weight: 400; }
+  .mc-meaning { font-size: 1.05rem; margin: .3rem 0; }
+  .mc-meaning.mc-quiet { color: var(--ink-3); font-size: .9rem; }
+  .mc-note { background: var(--teal-pale); border-radius: var(--radius);
+             padding: .5rem .6rem; margin: .4rem 0; color: var(--ink-2);
+             font-size: .9rem; }
+  .mc-ex { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
+  .mc-ex .mc-e { border: 1px solid var(--rule); border-radius: var(--radius);
+                 padding: .25rem .5rem; font-size: .9rem;
+                 display: inline-flex; align-items: baseline; gap: .35rem; }
+  .mc-ex .mc-e.known { border-color: var(--green-2); background: var(--green-pale-2); }
+  .mc-e-char { font-size: 1.25rem; }
+  .mc-e-gloss { color: var(--ink-3); font-size: .8rem; }
+  .mc-marks { color: var(--mute-2); font-size: .8rem; margin-top: .5rem; }
+
+  /* the tell-apart quiz (plan 10 Phase 7). Same accent as the form-of card,
+     because it is the same track. The prompt is jyutping and nothing else —
+     writing the word in characters would hand over the answer. */
+  .ta-prompt { font-size: 1.6rem; color: var(--blue); margin: .4rem 0;
+               letter-spacing: .02em; }
+  .ta-prompt.ta-en { font-size: 1.1rem; color: var(--ink-2); }
+  .ta-mark { color: var(--amber); font-weight: 700; }
+  .ta-hint { font-size: .85rem; margin-bottom: .4rem; }
+  .ta-hint .ta-en { color: var(--ink-3); }
+  .ta-why { border-left: 3px solid var(--teal); padding-left: .7rem;
+            margin-top: .6rem; }
+  .ta-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem;
+            padding: .25rem 0; }
+  .ta-row.ta-is { background: var(--green-pale-2); border-radius: var(--radius-sm); }
+  .ta-part, .ta-char { font-size: 1.3rem; }
+  .ta-pg, .ta-cg { color: var(--ink-3); font-size: .85rem; }
+  .ta-sep { color: var(--mute-3); }
   .lc-reading { padding: .35rem .5rem .45rem; margin: .3rem 0; }
   .lc-reading.own { background: var(--own-bg); border-radius: 8px; }
   .lc-reading:not(.own) .lc-jp { color: var(--jp-quiet); font-weight: 400;

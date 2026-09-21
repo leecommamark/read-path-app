@@ -276,6 +276,205 @@ async function hydrate() {
   return true;
 }
 
+// ---------- the meaning track's shipped tables (plan 10) ----------
+// The same two doors as `analyse` and `charlist`: the shipped tables in a
+// build, the server in the authoring environment.
+//
+// NOT AT BOOT, AND THAT IS LOAD-BEARING. Plan 9.1 Phase 2 moved the table
+// install out from under the first paint — an empty profile sees the intro
+// while the tables are still arriving — so anything that awaits `tablesReady`
+// must sit behind a door the learner opens, never in `hydrate`. This is that
+// door, and the bound-form migration rides on it rather than on boot.
+let MEANING = null;                 // {semantic, tellapart, boundforms}
+let meaningPromise = null;
+// The TABLES load once; the SCHEDULING runs on every call, because what is
+// quizzable changes as the learner acquires characters and a door is exactly
+// where that should be noticed.
+async function ensureMeaning() {
+  await loadMeaningTables();
+  scheduleFamilies();
+  return MEANING;
+}
+function loadMeaningTables() {
+  if (!meaningPromise) meaningPromise = (async () => {
+    const names = ['semantic', 'tellapart', 'boundforms'];
+    let tables;
+    if (BUILD_MODE === 'device') {
+      await tablesReady;
+      const t = ANALYSIS.tables();
+      tables = names.map(n => t[n]);
+    } else {
+      tables = await Promise.all(
+        names.map(n => fetch('api/' + n).then(r => r.json())));
+    }
+    MEANING = Object.fromEntries(names.map((n, i) => [n, tables[i]]));
+    migrateBoundForms();
+    return MEANING;
+  })().catch(e => { meaningPromise = null; throw e; });
+  return meaningPromise;
+}
+
+// ---------- scheduling the meaning track (plan 10 Phase 8) ----------
+// A form-of card is introduced JUST BEFORE the first eligible family that
+// needs it reaches the learner — not after N exposures, and not as an up-front
+// chart of radicals, which is the thing this design is a reaction against.
+// Value orders what is due when several qualify; the floor decides what never
+// earns a card at all.
+const MEANING_FLOOR = 0.01;        // decision H: cuts 冖, which marks one character
+const MEANING_PER_BATCH = 1;       // decision C: one item per Learn batch of 5
+
+// A form-of card exists for a SQUEEZED SHAPE only. A full character used as a
+// meaning part — 木 言 女 虫 — gets none: whoever reads 虫 already knows what
+// it means. So the universe is the bound forms that have a curated meaning row
+// (15 of 19) and clear the floor (14).
+function meaningIndex() {
+  // All three or none. A half-populated MEANING is reachable — an install
+  // that fetched one table and not the next — and the honest answer there is
+  // "no meaning track this run", not a crash inside a Learn batch.
+  if (!MEANING || !['semantic', 'tellapart', 'boundforms']
+        .every(k => Array.isArray(MEANING[k]))) return null;
+  if (MEANING.__ix) return MEANING.__ix;
+  const bound = new Set(MEANING.boundforms.filter(b => b[1]).map(b => b[0]));
+  const cardable = new Map();
+  for (const r of MEANING.semantic)
+    if (bound.has(r[0]) && r[5] >= MEANING_FLOOR) cardable.set(r[0], r[5]);
+  // part -> the characters whose family would quiz it. Quiz families only:
+  // a part nothing can be told apart by is a part nothing needs.
+  const needs = new Map();
+  for (const row of MEANING.tellapart) {
+    if (!row[1]) continue;
+    for (const m of row[2]) {
+      if (!cardable.has(m[1])) continue;
+      if (!needs.has(m[1])) needs.set(m[1], []);
+      needs.get(m[1]).push(m[0]);
+    }
+  }
+  return (MEANING.__ix = {cardable, needs});
+}
+
+// The parts whose moment has come: a family that needs them holds a character
+// the learner has already met, or is about to meet in this batch. Both halves
+// matter — the first is what makes every form-of card due at once for a
+// placed-out learner, which is intended and is what the per-batch cap is for.
+function newMeaningParts(upcoming) {
+  const ix = meaningIndex();
+  if (!ix) return [];
+  const soon = new Set(upcoming || []);
+  const out = [];
+  for (const [mp, chars] of ix.needs) {
+    if (cards[partKey(mp)]) continue;                   // already introduced
+    if (!chars.some(c => soon.has(c) || metChar(c))) continue;
+    out.push(mp);
+  }
+  return out.sort((a, b) => ix.cardable.get(b) - ix.cardable.get(a));
+}
+
+// A family is quizzable once it can put a real question: a member the learner
+// has met whose meaning part has been introduced (decision I), and at least
+// one other member to tell it from. The card is per FAMILY, not per item —
+// each review draws a fresh target, so nobody memorises one question.
+function familyQuizzable(head) {
+  const row = MEANING && Array.isArray(MEANING.tellapart)
+    && MEANING.tellapart.find(r => r[0] === head);
+  if (!row || !row[1] || row[2].length < 2) return false;
+  return row[2].some(m => metChar(m[0]) && isPartKnown(m[1]));
+}
+
+// Mint a card for every family that has just become quizzable. Run at the
+// doors rather than on every card write: it walks 255 families, which is
+// nothing once a screen opens and would be silly inside saveCards.
+// Rung 0 — first review tomorrow, like any freshly acquired card.
+function scheduleFamilies() {
+  if (!meaningIndex()) return 0;
+  let minted = 0;
+  for (const row of MEANING.tellapart) {
+    if (!row[1] || cards[famKey(row[0])]) continue;
+    if (!familyQuizzable(row[0])) continue;
+    mintCard(famKey(row[0]), 0);
+    minted++;
+  }
+  return minted;
+}
+
+// What the next Learn batch should carry from this track: due items first —
+// they are a promise already made — then the most valuable new part.
+function meaningForBatch(upcoming, n) {
+  if (!meaningIndex()) return [];
+  const out = dueMeaningKeys().filter(k => meaningKind(k) === 'part')
+    .map(k => meaningOf(k));
+  for (const mp of newMeaningParts(upcoming)) {
+    if (out.length >= n) break;
+    if (!out.includes(mp)) out.push(mp);
+  }
+  return out.slice(0, n);
+}
+
+// ---------- the bound-form migration (plan 10 Phase 5) ----------
+// Plan 10 Phase 3 took 19 squeezed shapes out of the learning order — they
+// were learnable only because chars.tsv gives each a reading, and 辶's caang1
+// has no dictionary behind it. A learner who used the app before that may
+// hold a real, scheduled card for one. CLAUDE.md forbids wiping a songpath.*
+// key and the brief forbids losing scheduling history, so the card MOVES:
+// same rung, same lapses, same `added`, same due date, under the form-of key.
+//
+// Only a shape with a curated meaning row can become a form-of card. 亍 叟 舛
+// 豸 are sound parts, not meaning parts, and the shipped `boundforms` table
+// says so per row — their old cards are left exactly where they are rather
+// than deleted, which is what "never delete scheduling history silently"
+// means here. They are invisible and harmless: nothing draws a character
+// outside charlist.
+//
+// Idempotent by construction, so it needs no marker key: it only ever reads
+// `<char>:` keys for characters on the bound list and removes them as it
+// goes, so a second pass finds nothing. Unlike `songpath.migrated` there is
+// nothing here a stale marker could strand.
+// A shipped `semantic` row as an object. The table is positional (it is
+// pathbuilder.SEMANTIC_FIELDS order and nothing on the device reads it by
+// name until here), so this is the one place that knows the slot order.
+const SEMANTIC_FIELDS = ['component', 'full_form', 'meaning', 'reliability',
+                         'note', 'value', 'marks', 'examples'];
+function semanticOf(ch) {
+  const row = MEANING && Array.isArray(MEANING.semantic)
+    && MEANING.semantic.find(r => r[0] === ch);
+  return row ? Object.fromEntries(SEMANTIC_FIELDS.map((k, i) => [k, row[i]]))
+             : null;
+}
+
+// Has the learner met this character at all? Any card, even a lapsed one —
+// "met" is weaker than "known" on purpose: the tell-apart quiz asks you to
+// tell 清 from 晴, which is a fair question the moment you have seen both.
+const metChar = ch => cardsOf(ch).length > 0;
+
+// Has the meaning part been introduced? A squeezed shape is introduced by its
+// form-of card; a full character (木 言 女 虫) by being known as a character,
+// since whoever reads 虫 knows what it means and gets no card of its own.
+// The lapse rule is the store's: a card lapsed and overdue is not knowledge.
+function isPartKnown(ch) {
+  const c = cards[partKey(ch)];
+  if (c && !(c.rung === 0 && c.lapses > 0 && c.due <= Date.now())) return true;
+  return isKnownChar(ch);
+}
+
+function migrateBoundForms() {
+  if (!MEANING || !Array.isArray(MEANING.boundforms)) return 0;
+  let moved = 0;
+  for (const [ch, curated] of MEANING.boundforms) {
+    if (!curated) continue;
+    const keys = cardsOf(ch);
+    if (!keys.length) continue;
+    const pk = partKey(ch);
+    for (const k of keys) {
+      const old = cards[k];
+      // the best-scheduled wins, exactly as foldVariantCards decides
+      if (!cards[pk] || cards[pk].rung < old.rung) cards[pk] = {...old};
+      delete cards[k];
+      moved++;
+    }
+  }
+  if (moved) saveCards();
+  return moved;
+}
+
 // The one-time move out of localStorage, and the last place localStorage is
 // read (plan 8 Phase 2; the rule that would have allowed a wipe instead was
 // retired in Phase 1). Only two things are carried, because only two things
@@ -872,6 +1071,21 @@ let charlist = null;                              // global learning order (lazy
 const LADDER = [1, 3, 7, 14, 30, 90, 180];       // days to the next review
 const MATURE_RUNG = 4;                           // 30 d — calibrate/placement entry
 const DAY = 86400e3;
+// ---------- the meaning track's keys (plan 10 Phase 5) ----------
+// songpath.cards is ONE flat map and five places read its keys as
+// `char:reading`. A meaning-track key must therefore be unreadable as one,
+// not merely unlikely: '@' is not a CJK character and no reading starts with
+// it, so `cardsOf('辶')` cannot reach '@part:辶' by prefix and
+// `dropOrphanCards` — which DELETES what it does not recognise — cannot see
+// it at all. The two that still need telling are rebuildKnown and dueKeys,
+// below; tools/client_test.js has a check per consumer.
+const MT = '@';                                  // reserved: never a character
+const partKey = ch => '@part:' + ch;             // a form-of card
+const famKey = head => '@fam:' + head;           // a tell-apart family
+const isMeaningKey = k => k[0] === MT;
+const meaningKind = k => k.slice(1, k.indexOf(':'));
+const meaningOf = k => k.slice(k.indexOf(':') + 1);
+
 const cardsOf = ch => Object.keys(cards).filter(k => k.startsWith(ch + ':'));
 const newCard = rung => ({rung, due: Date.now() + LADDER[rung] * DAY,
                           last: Date.now(), lapses: 0, added: Date.now()});
@@ -885,6 +1099,11 @@ function rebuildKnown() {
   const now = Date.now();
   for (const [k, c] of Object.entries(cards)) {
     if (c.rung === 0 && c.lapses > 0 && c.due <= now) continue;
+    // A meaning-track card is not knowledge of a character — knowing what 辶
+    // MEANS is not being able to read 辶 — and knownChars drives the
+    // Characters grid, the coverage meter and charStats. Left in, the first
+    // form-of card would have added the string "@part" to it.
+    if (isMeaningKey(k)) continue;
     knownKeys.add(k);
     knownChars.add(k.slice(0, k.indexOf(':')));
   }

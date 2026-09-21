@@ -13,7 +13,7 @@
 var ANALYSIS = ANALYSIS || {};
 
 // Keep in sync with PAGE_V in pathbuilder.py and library.js.
-ANALYSIS.PAGE_V = 15;
+ANALYSIS.PAGE_V = 16;
 // How many "worth meeting first" rows the payload carries (PREREQ_MAX).
 ANALYSIS.PREREQ_MAX = 40;
 

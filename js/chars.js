@@ -45,11 +45,15 @@ function renderCharList() {
       data-jp="${esc(c.reading || '')}"
       title="#${c.rank} ${esc(c.reading || '?')} — ${esc(c.gloss || '')}">${esc(c.char)}</span>`).join('');
 }
+// Sound-track cards only, and the count says the same. This button sits under
+// a grid of 3,000 characters and offers to clear it; the meaning track has no
+// surface here, and silently deleting progress a screen does not show is
+// worse than leaving it. Plan 10 Phase 5.
 $('deselectAll').onclick = () => {
-  const n = Object.keys(cards).length;
-  if (!n) return;
-  if (!confirm(`Delete all ${n} review cards? This wipes the SRS schedule for every text.`)) return;
-  cards = {};
+  const keys = Object.keys(cards).filter(k => !isMeaningKey(k));
+  if (!keys.length) return;
+  if (!confirm(`Delete all ${keys.length} review cards? This wipes the SRS schedule for every text.`)) return;
+  for (const k of keys) delete cards[k];
   saveCards();
   renderCharList();
 };

@@ -186,3 +186,63 @@ function readingSection(cur, r, c, due) {
     ${vars}
   </div>`;
 }
+
+// ---------- the form-of card (plan 10 Phase 6) ----------
+// The meaning track's presentation card: what a squeezed shape MEANS, and the
+// characters it marks. It is deliberately light — no reading is shown and none
+// is ever quizzed, because 辶's "caang1" is a spelling no dictionary attests
+// and teaching it was the mistake plan 10 exists to undo.
+//
+// A full character used as a meaning part (木 言 女 虫) gets no card of its
+// own: whoever knows 虫 already knows what it means. This draws whatever the
+// scheduler hands it; deciding which parts earn a card is the value floor's
+// job, and when is plan 10 Phase 8's.
+
+// The wording, approved by Mark 2026-09-21. The shapes are his, from the
+// brief: strong states the meaning plainly, loose hedges it, misleading leads
+// with the note. "Often to do with insect." reads a little oddly where the
+// curated meaning is a bare noun; it was put to him and he kept it, so change
+// the TABLE's wording rather than this frame if it ever grates.
+const MC_WORDING = {
+  strong: m => esc(m),
+  loose: m => 'Often to do with ' + esc(m) + '.',
+  misleading: m => esc(m),          // the note leads; this follows it, muted
+};
+const MC_EXAMPLES = 8;
+
+function partCardHtml(row) {
+  if (!row) return '';
+  const mis = row.reliability === 'misleading';
+  // "from 手" only where the curated table has a full form. 61 of the 76 rows
+  // leave it blank — most meaning parts ARE the full character — so an
+  // absent line is the common case, not an edge one.
+  const from = row.full_form
+    ? `<div class="mc-from">from <b>${esc(row.full_form)}</b></div>` : '';
+  // the note is always shown for a misleading part, because for those the
+  // note IS the card; elsewhere it qualifies the meaning and follows it
+  const note = row.note
+    ? `<div class="mc-note">${esc(row.note)}</div>` : '';
+  const meaning =
+    `<div class="mc-meaning${mis ? ' mc-quiet' : ''}">` +
+    `${(MC_WORDING[row.reliability] || MC_WORDING.strong)(row.meaning)}</div>`;
+  // known first, then the shipped order, which is by commonness. The shipped
+  // order is a starting point rather than the answer: which characters the
+  // learner already reads is not knowable at build time.
+  const ex = (row.examples || [])
+    .map(([ch, gloss]) => ({ch, gloss, known: isKnownChar(ch)}))
+    .sort((a, b) => b.known - a.known)
+    .slice(0, MC_EXAMPLES);
+  return `
+    <div class="mc">
+      <div class="mc-label" lang="en">meaning part</div>
+      <div class="mc-char">${esc(row.component)}</div>
+      ${from}
+      ${mis ? note + meaning : meaning + note}
+      <div class="mc-ex">${ex.map(e => `
+        <span class="mc-e${e.known ? ' known' : ''}">
+          <span class="mc-e-char">${esc(e.ch)}</span>
+          <span class="mc-e-gloss">${esc(e.gloss)}</span>
+        </span>`).join('')}</div>
+      <div class="mc-marks" lang="en">marks ${row.marks} of your 3,000 characters</div>
+    </div>`;
+}

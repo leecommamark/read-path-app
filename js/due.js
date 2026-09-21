@@ -4,9 +4,24 @@
 let dueIx = [];        // [{id, ix}] — coverage indexes, for the context search
 let duePageId = null;  // which text `page` is holding during a due run
 
+// Sound-track keys only. Every key here is handed to the quiz, which reads it
+// as `char:reading` and draws a character card from it — so a meaning-track
+// key arriving in this deck would not be a wrong question, it would be a
+// broken screen. The meaning track's own due items are dueMeaningKeys below,
+// and plan 10 Phase 8 decides where they surface; until then they are
+// scheduled and simply not offered, which is why this filter is the whole of
+// the change and not a temporary one.
 function dueKeys() {
   const now = Date.now();
-  return Object.keys(cards).filter(k => cards[k].due <= now)
+  return Object.keys(cards)
+    .filter(k => !isMeaningKey(k) && cards[k].due <= now)
+    .sort((a, b) => cards[a].due - cards[b].due);
+}
+
+function dueMeaningKeys() {
+  const now = Date.now();
+  return Object.keys(cards)
+    .filter(k => isMeaningKey(k) && cards[k].due <= now)
     .sort((a, b) => cards[a].due - cards[b].due);
 }
 
@@ -27,10 +42,14 @@ async function openDue() {
   show('due');
   duePageId = textId;   // arriving from a text: its payload is already loaded
   textId = null;
-  const keys = dueKeys().map(k => {
+  try { await ensureMeaning(); } catch (e) { /* no meaning track this run */ }
+  // The day's deck is both tracks. A meaning item carries no text context and
+  // borrows none — it is global — so it is simply another entry in the queue.
+  const keys = [...dueKeys().map(k => {
     const i = k.indexOf(':');
     return {char: k.slice(0, i), jp: k.slice(i + 1)};
-  });
+  }), ...dueMeaningKeys().map(k => meaningKind(k) === 'fam'
+    ? {fam: meaningOf(k)} : {part: meaningOf(k)})];
   if (!keys.length) {
     $('quizbox').style.display = 'none';
     $('dueStats').textContent = '';

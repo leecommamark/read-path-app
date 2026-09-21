@@ -143,6 +143,11 @@ document.querySelectorAll('nav button').forEach(b =>
 $('toLearn').onclick = () => setMode('learn');
 
 async function setMode(mode) {
+  // The meaning track's door. It is here and in openDue rather than in boot:
+  // hydrate must not wait for the table install (plan 9.1 Phase 2). Failure
+  // is survivable — the sound track does not depend on these tables — so a
+  // broken or old build simply has no meaning track rather than no Learn tab.
+  try { await ensureMeaning(); } catch (e) { /* no meaning track this run */ }
   for (const m of ['calibrate', 'learn', 'review', 'reader'])
     $(m).style.display = m === mode ? '' : 'none';
   document.querySelectorAll('nav button').forEach(b =>
