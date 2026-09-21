@@ -21,8 +21,10 @@ async function openChars() {
     try {
       if (BUILD_MODE === 'device') {
         await tablesReady;
+        // positional, in pathbuilder.CHARLIST_FIELDS order
         charlist = ANALYSIS.tables().charlist.map(
-          r => ({char: r[0], rank: r[1], reading: r[2], gloss: r[3]}));
+          r => ({char: r[0], rank: r[1], reading: r[2], gloss: r[3],
+                 wrank: r[4]}));
       } else {
         charlist = await (await fetch('api/charlist')).json();
       }
@@ -66,18 +68,42 @@ $('charTokens').onclick = e => {              // delegated: 3,000 tokens
     `${knownChars.size} known of ${charlist.length} in the learning order.`;
 };
 
-// placement: binary search on the learning-order frontier, but forgiving —
-// each level asks up to 3 characters from the same band and moves on the
-// majority (first two answers agreeing skip the third), so one careless tap
-// or one unlucky rare character can't halve the estimate on its own.
+// placement: binary search on the learner's frontier, but forgiving — each
+// level asks up to 3 characters from the same band and moves on the majority
+// (first two answers agreeing skip the third), so one careless tap or one
+// unlucky rare character can't halve the estimate on its own.
 // "I don't know this one" is an explicit miss: with four choices a guess is
 // right a quarter of the time, which pushes the frontier estimate too far
 // down the order, so the honest answer gets its own button.
+//
+// WHAT IT SEARCHES, since plan 9.2: written-Chinese frequency (`wrank`), not
+// the learning order. The testers are heritage speakers with some Chinese
+// school — they read the commonest characters of standard written Chinese,
+// and they did not learn them in this project's order, which deliberately
+// differs from school order most at the start. The learning order itself is
+// untouched: the queue keeps its order and skips what placement marked known,
+// and the grid above still draws all 3,000 in learning order, so after "Mark
+// those N" the known tokens are scattered through it rather than a solid
+// block at the top. That is expected.
 let pt = null;   // {lo, hi, level, levelResults, results: [{char, right}]}
 const PT_LEVELS = 7;
 
+// The pool: the characters standard written Chinese actually uses, commonest
+// first. The 71 with no written count carry no `wrank` (pathbuilder.py), and
+// they are exactly the bound components and the colloquial characters — 辶,
+// 佢, 咁 — which nobody learned at Chinese school. So they are neither asked
+// about nor marked known, and the search's upper bound is this list's length
+// rather than charlist's. Cached: charlist is loaded once and never mutated.
+let ptOrder = null;
+function placementOrder() {
+  if (!ptOrder)
+    ptOrder = charlist.filter(c => c.wrank && c.reading)
+                      .sort((a, b) => a.wrank - b.wrank);
+  return ptOrder;
+}
+
 $('ptStart').onclick = () => {
-  pt = {lo: 0, hi: charlist.length, level: 0, levelResults: [], results: []};
+  pt = {lo: 0, hi: placementOrder().length, level: 0, levelResults: [], results: []};
   $('ptStart').style.display = 'none'; $('ptResult').style.display = 'none';
   $('ptQuiz').style.display = '';
   askPlacement();
@@ -86,8 +112,8 @@ $('ptStart').onclick = () => {
 function askPlacement() {
   if (pt.level >= PT_LEVELS || pt.hi - pt.lo < 20) return finishPlacement();
   const mid = Math.floor((pt.lo + pt.hi) / 2);
-  const band = charlist.slice(Math.max(0, mid - 40), mid + 40)
-    .filter(c => c.reading && !pt.results.some(r => r.char === c.char));
+  const band = placementOrder().slice(Math.max(0, mid - 40), mid + 40)
+    .filter(c => !pt.results.some(r => r.char === c.char));
   const c = band[Math.floor(Math.random() * band.length)];
   if (!c) return finishPlacement();
   pt.cur = {c, mid};
@@ -129,14 +155,14 @@ function finishPlacement() {
   $('ptResult').style.display = '';
   $('ptResult').innerHTML = `
     <p>${nRight}/${pt.results.length} correct. Estimated frontier: you can read
-    roughly the first <b>${n}</b> characters of the learning order.</p>
-    <button id="ptApply">Mark the first ${n} as known</button>
+    roughly the <b>${n}</b> most common characters in written Chinese.</p>
+    <button id="ptApply">Mark those ${n} as known</button>
     <button id="ptRetry">Retry</button>
     <p class="hint">Characters you answered wrong go back for review either way;
     right answers are marked known either way.</p>`;
   $('ptApply').onclick = () => {
-    for (const c of charlist.slice(0, n))
-      if (c.reading && !isKnownChar(c.char))    // never downgrade an existing card
+    for (const c of placementOrder().slice(0, n))
+      if (!isKnownChar(c.char))                 // never downgrade an existing card
         cards[keyOf(c.char, c.reading)] = newCard(MATURE_RUNG);
     saveCards();
     applyPtResults(); renderCharList();
