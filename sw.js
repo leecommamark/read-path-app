@@ -32,7 +32,7 @@ const PREFIX = 'readpath-';
 // it just filled. tools/build_dist.py substitutes this line and refuses to
 // build if it cannot find it. 'dev' is the source-tree value: a server build
 // gets one cache and keeps reusing it, which is what you want while editing.
-const BUILD = 'ef504b20b0be3787';
+const BUILD = '4baddea4ae13008a';
 const CACHE = PREFIX + BUILD;
 
 // A request whose response should never be cached: nothing in a shipped build

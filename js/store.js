@@ -383,16 +383,25 @@ function familyQuizzable(head) {
 // Mint a card for every family that has just become quizzable. Run at the
 // doors rather than on every card write: it walks 255 families, which is
 // nothing once a screen opens and would be silly inside saveCards.
-// Rung 0 — first review tomorrow, like any freshly acquired card.
+//
+// DUE IMMEDIATELY, not tomorrow (decided 2026-09-21 by Mark). Rung 0 puts a
+// freshly acquired sound card a day out, and that is right for one — it has
+// just been quizzed in its own Learn batch. A family has not: the learner was
+// shown what 氵 means and the question "which cing1?" is the payoff, so
+// making them wait a day to be asked breaks the connection while it is warm.
+// The ladder is unchanged from the first answer onward.
 function scheduleFamilies() {
   if (!meaningIndex()) return 0;
+  const now = Date.now();
   let minted = 0;
   for (const row of MEANING.tellapart) {
     if (!row[1] || cards[famKey(row[0])]) continue;
     if (!familyQuizzable(row[0])) continue;
     mintCard(famKey(row[0]), 0);
+    cards[famKey(row[0])].due = now;
     minted++;
   }
+  if (minted) saveCards();           // mintCard saved the rung; this saves the due
   return minted;
 }
 
