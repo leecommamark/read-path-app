@@ -11,10 +11,26 @@ async function openChars() {
     // the same stamp as `analyse`: shipped table or server, never a probe.
     // The shipped table is the same rows GET /api/charlist answers with,
     // built from output/order.csv by tools/build_dist.py.
-    charlist = BUILD_MODE === 'device'
-      ? ANALYSIS.tables().charlist.map(
-          r => ({char: r[0], rank: r[1], reading: r[2], gloss: r[3]}))
-      : await (await fetch('api/charlist')).json();
+    //
+    // This is the second of the two doors into the tables (analyse() is the
+    // other). Since plan 9.1 Phase 2 the install runs behind the first-run
+    // screen, and "Take the placement test" is one tap away from that screen,
+    // so it may well arrive first. The line above is already the right thing
+    // to say while waiting. The catch is new: without one a failed install
+    // left this screen saying "Loading the learning order…" for ever.
+    try {
+      if (BUILD_MODE === 'device') {
+        await tablesReady;
+        charlist = ANALYSIS.tables().charlist.map(
+          r => ({char: r[0], rank: r[1], reading: r[2], gloss: r[3]}));
+      } else {
+        charlist = await (await fetch('api/charlist')).json();
+      }
+    } catch (e) {
+      $('charStats').textContent =
+        'Could not load the learning order — ' + e.message;
+      return;
+    }
   }
   renderCharList();
 }

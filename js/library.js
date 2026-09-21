@@ -74,13 +74,12 @@ const SEEN_INTRO = 'songpath.seenIntro';
 
 function showIntro() { show('howitworks'); }
 
-// Called by the boot line instead of renderLibrary when this is a first run.
-// hydrate() has already defaulted the marker to `true` for any store that
-// holds a library, so an existing learner never arrives here.
-function firstRunOrLibrary() {
-  if (load(SEEN_INTRO, false) === true) return renderLibrary();
-  showIntro();
-}
+// The predicate boot.js decides on. It was `firstRunOrLibrary()`, which both
+// decided and drew; plan 9.1 Phase 2 needed the decision on its own, because
+// the draw now happens before the tables install rather than after. hydrate()
+// has already defaulted the marker to `true` for any store that holds a
+// library, so an existing learner is never a first run.
+const seenIntro = () => load(SEEN_INTRO, false) === true;
 
 function leaveIntro() {
   save(SEEN_INTRO, true);
@@ -129,12 +128,22 @@ function renderLibrary() {
   // A write that did not land, said out loud. Nothing read `flushFailed`
   // before plan 8 Phase 3, and a store that fails in silence is the exact bug
   // Phase 0 found in the store this one replaced.
+  // The tables are the other thing that can fail before this screen is
+  // reached, and until plan 9.1 Phase 2 a failed install showed nothing at
+  // all — the boot chain stopped and the page stayed blank. It is read here
+  // rather than announced once by boot() so that it survives a re-render.
   const bad = storeTrouble();
-  $('storeWarn').style.display = bad ? '' : 'none';
-  if (bad) $('storeWarn').textContent =
-    `Some progress could not be saved (${bad.message}). ` +
-    `${bad.pending} item${bad.pending === 1 ? '' : 's'} still pending — ` +
-    `use Export progress to keep a copy.`;
+  const warn = bad
+    ? `Some progress could not be saved (${bad.message}). ` +
+      `${bad.pending} item${bad.pending === 1 ? '' : 's'} still pending — ` +
+      `use Export progress to keep a copy.`
+    : tablesFailed
+      ? `The character tables could not be loaded (${tablesFailed.message}). ` +
+        `Adding a text and the placement test both need them — reopen the app ` +
+        `once you have a connection.`
+      : '';
+  $('storeWarn').style.display = warn ? '' : 'none';
+  $('storeWarn').textContent = warn;
   $('toDue').textContent = `Due today (${dueKeys().length})`;
   $('textlist').innerHTML = texts.length ? texts.map(s => {
     const ix = loadCov(s.id);
@@ -511,7 +520,12 @@ const PAGE_V = 15;
 // device-mode payload is the same payload — tools/parity.js holds it to zero
 // diffs on every key of every fixture.
 async function analyse(text) {
-  if (BUILD_MODE === 'device') return buildPage(text);
+  // The install runs behind the first-run screen since plan 9.1 Phase 2, so
+  // this is one of the two doors that has to wait for it (chars.js has the
+  // other). Every caller of analyse() already shows a progress line and
+  // catches into an error surface, which is why the wait lives here rather
+  // than on the buttons that lead here.
+  if (BUILD_MODE === 'device') { await tablesReady; return buildPage(text); }
   const r = await fetch('api/path', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({text}),

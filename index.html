@@ -273,19 +273,17 @@
 <script src="js/quiz.js"></script>
 <script src="js/learn.js"></script>
 <script src="js/reader.js"></script>
-<!-- the store is IndexedDB behind a cache since plan 8 Phase 2, so the boot
-     waits on one hydrate: it opens the database, runs the one-time move out
-     of localStorage, and fills the cache with what the library list needs -->
+<!-- boot.js last, because it calls into every file above it. It used to be
+     the inline chain below, and moved out in plan 9.1 Phase 2 for two
+     reasons: the order of its lines was a bug (the tables installed before
+     the first-run screen was drawn, so a new user watched a blank page
+     through the slowest thing the app does), and an inline script cannot be
+     driven by tools/client_test.js, which loads static/js/*. -->
+<script src="js/boot.js"></script>
 <script>
-  // A device build has one more thing to do before the library draws: fetch
-  // the resident tables and, on a first run, import the keyed ones. The
-  // store's own plumbing is handed in rather than reached for, so the
-  // analyser stays ignorant of how the app stores things.
-  hydrate()
-    .then(() => BUILD_MODE === 'device'
-      ? ANALYSIS.installBrowserTables({get: dbGetMany, put: dbPutMany})
-      : null)
-    .then(() => { rebuildKnown(); firstRunOrLibrary(); });
+  // hydrate, decide, paint, then install the tables behind the paint. What
+  // each of those means is boot.js's business, and documented there.
+  boot();
 
   // The shell (plan 9 Phase 6). Registered relative, so the worker scopes to
   // wherever the app is served rather than to the origin root — a project

@@ -129,8 +129,10 @@
   .result { border: 1px solid var(--rule-2); border-radius: 6px; padding: .35rem .6rem;
             margin: .3rem 0; font-size: .95rem; }
   .result .r-head { cursor: pointer; }
-  .result:hover { border-color: var(--mute-2); }
-  .result .r-head:hover { background: var(--paper-2); }
+  @media (hover: hover) {
+    .result:hover { border-color: var(--mute-2); }
+    .result .r-head:hover { background: var(--paper-2); }
+  }
   .result .r-meta { color: var(--mute-2); font-size: .8rem; }
   .result .r-copies { color: var(--mute-2); font-size: .8rem; border: 1px solid var(--rule);
                       border-radius: 4px; padding: 0 .3rem; margin-left: .3rem; }
@@ -150,7 +152,7 @@
   button.linkish { background: none; border: none; color: var(--mute);
                    text-decoration: underline; padding: .4rem .5rem;
                    min-height: var(--tap); }
-  button.linkish:hover { color: var(--ink-0); }
+  @media (hover: hover) { button.linkish:hover { color: var(--ink-0); } }
   button[disabled] { opacity: .5; cursor: not-allowed; }
   #searchBox h3 { margin: 1.2rem 0 .4rem; color: var(--ink-3); font-size: 1rem; }
 
@@ -172,7 +174,9 @@
             padding: .3rem .55rem; cursor: pointer; background: var(--paper);
             font-size: .9rem; min-height: var(--tap);
             display: inline-flex; align-items: center; }
-  .prereq:hover { border-color: var(--mute-2); background: var(--paper-2); }
+  @media (hover: hover) {
+    .prereq:hover { border-color: var(--mute-2); background: var(--paper-2); }
+  }
   .prereq b { font-size: 1.2rem; margin-right: .25rem; }
   .prereq .p-gloss { color: var(--ink-3); margin-left: .3rem; }
   .prereq .p-for { color: var(--mute-3); margin-left: .35rem; }
@@ -188,7 +192,9 @@
   #ptUnknown { background: none; border: 1px solid var(--rule);
                border-radius: var(--radius-sm); color: var(--mute);
                font-size: .85rem; padding: .3rem .9rem; min-height: var(--tap); }
-  #ptUnknown:hover { border-color: var(--mute-3); color: var(--ink-2); }
+  @media (hover: hover) {
+    #ptUnknown:hover { border-color: var(--mute-3); color: var(--ink-2); }
+  }
   #ptResult b { color: var(--blue); }
 
   /* text header + meter */
@@ -217,8 +223,19 @@
            padding: .3rem .55rem; cursor: pointer; user-select: none;
            background: var(--paper); font-size: 1.3rem;
            min-height: var(--tap); display: inline-flex; align-items: center; }
+  /* Hover is behind `hover: hover`, not reset under `hover: none`, and it is
+     ABOVE the state class rather than below it. Both halves are load-bearing
+     and both were bugs (plan 9.1 Phase 1). A reset that set `border-color:
+     inherit` had the same 0-2-0 specificity as `.token.known` and came later,
+     so on a phone a tapped character went white-with-a-dark-rule instead of
+     green until the sticky :hover moved elsewhere. And `.token:hover` sitting
+     below `.token.known` lost the green border to grey under a real pointer.
+     The rule for this file: hover styling is decorative, it goes behind
+     `@media (hover: hover)`, it lives beside what it modifies, and it never
+     outranks a state class. `tools/client_test.js` checks the first of those
+     on every run. */
+  @media (hover: hover) { .token:hover { border-color: var(--mute-2); } }
   .token.known { background: var(--green-pale); border-color: var(--green-2); opacity: .6; }
-  .token:hover { border-color: var(--mute-2); }
   #calTokens { display: flex; flex-wrap: wrap; gap: .35rem; }
 
   /* learn */
@@ -374,17 +391,6 @@
     #lines.markmode .card { min-height: 0; }
     .token, .prereq { min-height: 0; }
     .token { padding: .15rem .45rem; }
-  }
-
-  /* A pointer that cannot hover gets no hover styling — on a touch screen
-     those rules fire on tap and stick, which reads as a selection that is
-     not there. Everything here is decorative; nothing is the only way to
-     reach a piece of information. */
-  @media (hover: none) {
-    .token:hover, .prereq:hover, .result:hover, .result .r-head:hover,
-    button.linkish:hover, #ptUnknown:hover {
-      border-color: inherit; background: inherit; color: inherit;
-    }
   }
 
 /* ---------- the first-run screen (plan 9 Phase 7) ---------- */
