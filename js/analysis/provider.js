@@ -28,8 +28,16 @@ var ANALYSIS = ANALYSIS || {};
   'use strict';
 
   const BASE = 'tables/';                 // relative: never assume a domain
+  // MUST LIST EVERY RESIDENT TABLE THE BUILD SHIPS. A table missing here is
+  // downloaded, precached and then never opened — which is exactly what
+  // happened to the meaning track's three between plan 10 Phase 4 and this
+  // fix: they shipped, the service worker cached 94 KB of them, and
+  // `ANALYSIS.tables().semantic` stayed undefined on every device. The check
+  // in tools/client_test.js now compares this list against dist/tables, so
+  // the next one cannot be added silently.
   const RESIDENT = ['lexicon', 'chars', 'readings', 'families', 'charlist',
-                    'variants', 'offgloss'];
+                    'variants', 'offgloss',
+                    'semantic', 'tellapart', 'boundforms'];
   const P = 'dist.';                      // the shipped-table key prefix
   const MARK = P + 'imported';            // set once the import has finished
 

@@ -63,6 +63,10 @@ var ANALYSIS = ANALYSIS || {};
       readings: read('readings.json'),
       families: read('families.json'),
       offgloss: read('offgloss.json'),
+      charlist: read('charlist.json'),
+      semantic: read('semantic.json'),
+      tellapart: read('tellapart.json'),
+      boundforms: read('boundforms.json'),
       examples: bulk('examples'),
       cards: Object.assign(bulk('cards'), bulk('cards_rare')),
     };
