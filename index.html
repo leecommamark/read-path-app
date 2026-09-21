@@ -285,15 +285,6 @@
   // each of those means is boot.js's business, and documented there.
   boot();
 
-  // The shell (plan 9 Phase 6). Registered relative, so the worker scopes to
-  // wherever the app is served rather than to the origin root — a project
-  // page serves from a subdirectory and plan 10 wraps this same folder.
-  // Server builds register it too: the dev loop is the only place the shell
-  // can be exercised before it ships, and /api/* is exempted inside sw.js.
-  if ('serviceWorker' in navigator)
-    addEventListener('load', () => navigator.serviceWorker.register('./sw.js')
-      .catch(e => console.warn('service worker did not register', e)));
-
   // Ask for the bucket to be durable. Plan 8 measured this refused on the
   // browser to hand, and the store is best-effort either way — Export is
   // still the backup — but an installed app is a likelier yes than a tab,

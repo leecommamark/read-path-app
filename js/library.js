@@ -158,6 +158,10 @@ function renderLibrary() {
   // while the library is empty, offer the two ways in. Once any text exists
   // the library looks exactly as it did (FIRST_RUN_CONTENT.md).
   $('emptyActions').style.display = texts.length ? 'none' : '';
+  // The library with nothing in flight is the safe moment to pick up a new
+  // build, and it is usually not the moment the new worker claimed the page.
+  // boot.js decides; this only says "now would be a good time".
+  reloadForNewBuild();
   for (const row of document.querySelectorAll('.textrow')) {
     row.querySelector('.s-title').onclick = () => openText(+row.dataset.id);
     row.querySelector('.s-del').onclick = () => {
