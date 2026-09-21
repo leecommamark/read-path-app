@@ -216,10 +216,10 @@ function tellApartFamily(head) {
 // not a second puzzle
 function tellApartWord(m) {
   let best = null, bestScore = -1;
-  for (const [w, jp, ix] of m.words || []) {
+  for (const [w, jp, ix, gloss] of m.words || []) {
     const others = [...w].filter((_, i) => i !== ix);
     const score = others.filter(isKnownChar).length - others.length * 0.01;
-    if (score > bestScore) { bestScore = score; best = {w, jp, ix}; }
+    if (score > bestScore) { bestScore = score; best = {w, jp, ix, gloss}; }
   }
   return best;
 }
@@ -247,14 +247,33 @@ function tellApartItem(head) {
           word: tellApartWord(target)};
 }
 
+// The prompt: the word with ONLY the target syllable left as jyutping, every
+// other character written out.
+//
+// The target's characters are the four choices, so writing the target would
+// hand over the answer — but the rest of the word never could, and leaving it
+// as bare jyutping made the prompt two puzzles instead of one (Mark, testing
+// on the phone, 2026-09-21). "cing1 楚" asks one question; "cing1 co2" asked
+// the learner to decode co2 first, for nothing.
+const TA_WORD_FIELDS = ['word', 'jyutping', 'index', 'gloss'];
 function tellApartPromptHtml(item) {
   const w = item.word;
   if (!w)                                  // the brief's English fallback
     return `<div class="ta-prompt ta-en" lang="en">${esc(item.target.gloss)}</div>`;
-  const syls = w.jp.split(' ').map((s, i) => i === w.ix
-    ? `<b class="ta-mark">${esc(s)}</b>` : esc(s)).join(' ');
-  // the word is NEVER written in characters: the choices are characters
-  return `<div class="ta-prompt">${syls}</div>
+  const chars = [...w.w];
+  const syls = w.jp.split(' ');
+  // A context character that is ALSO one of the four choices stays as
+  // jyutping: 10 of 251 prompts had one, and writing it out would put an
+  // answer on screen just as surely as writing the target does. Masking it
+  // costs nothing and needs no different word.
+  const answers = new Set((item.choices || []).map(c => c.char));
+  const shown = chars.map((ch, i) => i === w.ix || answers.has(ch)
+    ? `<b class="${i === w.ix ? 'ta-mark' : 'ta-masked'}">${esc(syls[i] || '')}</b>`
+    : `<span class="ta-ctx">${esc(ch)}</span>`).join(' ');
+  // the hint is the WORD's meaning, not the target character's: the target's
+  // own gloss would be the answer, and the word's is what makes the question
+  // answerable at all
+  return `<div class="ta-prompt">${shown}</div>
     <div class="ta-hint"><a href="#" id="taGloss" lang="en">show meaning</a>
       <span id="taGlossText" class="ta-en" lang="en" style="display:none"></span></div>`;
 }
@@ -262,7 +281,15 @@ function tellApartPromptHtml(item) {
 // after an answer: the four characters with their meaning parts picked out
 // and glossed — "氵 water — 清 clear". This is the teaching, not the score.
 function tellApartWhyHtml(item) {
-  return `<div class="ta-why">${item.choices.map(m => `
+  // The shared sound part, alone and first. Which component the four have in
+  // common is not obvious from four whole characters — 清 晴 請 情 share 青,
+  // but you have to already know that to see it (Mark, 2026-09-21).
+  return `<div class="ta-why">
+    <div class="ta-head">
+      <span class="ta-head-label" lang="en">they all share</span>
+      <span class="ta-head-char">${esc(item.head)}</span>
+    </div>
+    ${item.choices.map(m => `
     <div class="ta-row${m.char === item.target.char ? ' ta-is' : ''}">
       <span class="ta-part">${esc(m.meaning_part)}</span>
       <span class="ta-pg" lang="en">${esc(m.part_gloss || '')}</span>
@@ -307,7 +334,8 @@ function askTellApart(cur) {
   const g = $('taGloss');
   if (g) g.onclick = ev => {
     ev.preventDefault();
-    $('taGlossText').textContent = item.target.gloss || '';
+    $('taGlossText').textContent =
+      (item.word && item.word.gloss) || item.target.gloss || '';
     $('taGlossText').style.display = '';
     g.style.display = 'none';
   };
