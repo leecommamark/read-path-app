@@ -265,7 +265,7 @@ function tellApartItem(head) {
   const rest = shuffle(others.filter(m => m.syllable !== target.syllable));
   const distractors = [...same, ...rest].slice(0, TA_CHOICES - 1);
   if (!distractors.length) return null;
-  return {head, target, distractors,
+  return {head, headReading: row[3] || '', target, distractors,
           choices: shuffle([target, ...distractors]),
           word: tellApartWord(target)};
 }
@@ -323,25 +323,41 @@ function tellApartPromptHtml(item) {
 const meaningHtml = g => g
   ? `<span class="qw-meaning" lang="en">${esc(g)}</span>` : '';
 
-// after an answer: the four characters with their meaning parts picked out
-// and glossed — "氵 water — 清 clear". This is the teaching, not the score.
+// after an answer: the four characters, said and glossed, each with the part
+// that tells it apart — "清 cing1 clear — 氵 water". This is the teaching,
+// not the score.
+//
+// THE CHARACTER LEADS (Mark, 2026-09-21). It used to be the part: "氵 water
+// — 清 clear", which asks the reader to hold a shape they do not know yet
+// before meeting the character it belongs to. The row now reads the way the
+// thought goes — this character, said this way, means this, and the part
+// that carries it is this — and it carries the JYUTPING, which the card had
+// never shown even though every choice is a character with a reading.
+const whyRow = (m, on) => `
+    <div class="ta-row${on ? ' ta-is' : ''}">
+      <span class="ta-char">${esc(m.char)}</span>
+      <span class="ta-jp">${esc(m.reading || '')}</span>
+      <span class="ta-cg" lang="en">${esc(m.gloss || '')}</span>
+      <span class="ta-sep">—</span>
+      <span class="ta-part">${esc(m.part)}</span>
+      <span class="ta-pg" lang="en">${esc(m.part_gloss || '')}</span>
+    </div>`;
+
 function tellApartWhyHtml(item) {
-  // The shared sound part, alone and first. Which component the four have in
-  // common is not obvious from four whole characters — 清 晴 請 情 share 青,
-  // but you have to already know that to see it (Mark, 2026-09-21).
+  // The shared sound part, alone and first, and now with its own reading:
+  // which component the four have in common is not obvious from four whole
+  // characters — 清 晴 請 情 share 青 — and the sound they share is the whole
+  // reason the question was hard.
   return `<div class="ta-why">
     <div class="ta-head">
       <span class="ta-head-label" lang="en">they all share</span>
       <span class="ta-head-char">${esc(item.head)}</span>
+      <span class="ta-head-jp">${esc(item.headReading || '')}</span>
     </div>
-    ${item.choices.map(m => `
-    <div class="ta-row${m.char === item.target.char ? ' ta-is' : ''}">
-      <span class="ta-part">${esc(m.meaning_part)}</span>
-      <span class="ta-pg" lang="en">${esc(m.part_gloss || '')}</span>
-      <span class="ta-sep">—</span>
-      <span class="ta-char">${esc(m.char)}</span>
-      <span class="ta-cg" lang="en">${esc(m.gloss || '')}</span>
-    </div>`).join('')}</div>`;
+    ${item.choices.map(m => whyRow(
+      {char: m.char, reading: m.reading, gloss: m.gloss,
+       part: m.meaning_part, part_gloss: m.part_gloss},
+      m.char === item.target.char)).join('')}</div>`;
 }
 
 // ---------- the meaning track inside the quiz loop (plan 10 Phase 8b) ----------
@@ -358,7 +374,8 @@ function tellApartWhyHtml(item) {
 // skill the card claims to teach, and characters as the choices keep it the
 // same shape as the tell-apart question.
 const PART_CHOICES = 4;
-const DISTRACTOR_FIELDS = ['char', 'part', 'part_gloss', 'gloss', 'confusable'];
+const DISTRACTOR_FIELDS = ['char', 'part', 'part_gloss', 'gloss',
+                           'confusable', 'reading'];
 const asDistractor = d =>
   Object.fromEntries(DISTRACTOR_FIELDS.map((k, i) => [k, d[i]]));
 
@@ -371,7 +388,8 @@ function partItem(part) {
   // the right answer: one of the part's own examples, known characters
   // first — recognising the part inside a character you already read is the
   // question; inside one you have never met is a different, harder one
-  const ex = (row.examples || []).map(([ch, gloss]) => ({ch, gloss}));
+  const ex = (row.examples || []).map(([ch, gloss, reading]) =>
+    ({ch, gloss, reading}));
   if (!ex.length) return null;
   const known = ex.filter(e => isKnownChar(e.ch));
   const pick = shuffle(known.length ? known : ex)[0];
@@ -379,7 +397,8 @@ function partItem(part) {
   // explanation closes the loop it opened — "the part for movement" then
   // "辶 movement — 這 this" — and reads the same length as the other three,
   // which carry the short role-gloss the build shipped
-  const target = {char: pick.ch, part, part_gloss: row.asks, gloss: pick.gloss};
+  const target = {char: pick.ch, part, part_gloss: row.asks,
+                  gloss: pick.gloss, reading: pick.reading};
   // three wrong answers, drawn fresh each time so nobody memorises one
   // question. Curated confusables come first in the shipped pool and are
   // preferred here; no two from the same part, so the four choices are four
@@ -406,14 +425,12 @@ function partItem(part) {
 // glossed, the same rows the tell-apart explanation uses — minus its head
 // line, since what these four share is nothing, which is the point.
 function partWhyHtml(item) {
-  return `<div class="ta-why">${item.choices.map(m => `
-    <div class="ta-row${m.char === item.target.char ? ' ta-is' : ''}">
-      <span class="ta-part">${esc(m.part)}</span>
-      <span class="ta-pg" lang="en">${esc(m.part_gloss || '')}</span>
-      <span class="ta-sep">—</span>
-      <span class="ta-char">${esc(m.char)}</span>
-      <span class="ta-cg" lang="en">${esc(m.gloss || '')}</span>
-    </div>`).join('')}</div>`;
+  // The same rows, and no head line — what these four share is nothing.
+  // The COMPONENT still carries no reading here: 辶's caang1 has no
+  // dictionary behind it, and teaching it is the mistake the form-of card
+  // exists to undo. The four characters are ordinary characters and do.
+  return `<div class="ta-why">${item.choices.map(m =>
+    whyRow(m, m.char === item.target.char)).join('')}</div>`;
 }
 
 function askPart(cur) {

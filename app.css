@@ -290,6 +290,9 @@
   .ta-part, .ta-char { font-size: 1.3rem; }
   .ta-pg, .ta-cg { color: var(--ink-3); font-size: .85rem; }
   .ta-sep { color: var(--mute-3); }
+  /* the reading, beside the character it belongs to, in the blue jyutping
+     wears everywhere else in the app */
+  .ta-jp, .ta-head-jp { color: var(--blue); font-size: .85rem; }
   .lc-reading { padding: .35rem .5rem .45rem; margin: .3rem 0; }
   .lc-reading.own { background: var(--own-bg); border-radius: 8px; }
   .lc-reading:not(.own) .lc-jp { color: var(--jp-quiet); font-weight: 400;
