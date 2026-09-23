@@ -96,15 +96,22 @@ function seriesBlock(c) {
   const sibs = phonNode?.series || [];
   if (sibs.length) {
     const label = phonNode.series_root
-      ? `${sibs.length} characters in the wider ${esc(phonNode.series_root)} sound family`
-      : `${sibs.length} other characters with phonetic ${esc(c.decomp.phonetic)}`;
+      ? `${sibs.length} character${sibs.length === 1 ? '' : 's'} in the wider `
+        + `${esc(phonNode.series_root)} sound family`
+      : `${sibs.length} other character${sibs.length === 1 ? '' : 's'} `
+        + `with phonetic ${esc(c.decomp.phonetic)}`;
     out += `<details class="lc-series"><summary>${label}</summary>
       ${seriesRows(sibs)}</details>`;
   }
   const derived = c.derived || [];
+  // 258 of the 3,000 ranked characters have exactly one derived character —
+  // 人 都 係 你 among them — so the singular is the common case, not the edge
+  // one, and it needs the verb and the possessive to agree, not just the noun.
   if (derived.length)
     out += `<details class="lc-series">
-      <summary>${derived.length} characters take ${esc(c.char)} as their phonetic</summary>
+      <summary>${derived.length === 1
+        ? `1 character takes ${esc(c.char)} as its phonetic`
+        : `${derived.length} characters take ${esc(c.char)} as their phonetic`}</summary>
       ${seriesRows(derived)}</details>`;
   return out;
 }

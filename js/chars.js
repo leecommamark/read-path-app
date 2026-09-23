@@ -52,7 +52,8 @@ function renderCharList() {
 $('deselectAll').onclick = () => {
   const keys = Object.keys(cards).filter(k => !isMeaningKey(k));
   if (!keys.length) return;
-  if (!confirm(`Delete all ${keys.length} review cards? This wipes the SRS schedule for every text.`)) return;
+  if (!confirm(`Delete all ${keys.length} review card${keys.length === 1 ? '' : 's'}? `
+    + 'This wipes the SRS schedule for every text.')) return;
   for (const k of keys) delete cards[k];
   saveCards();
   renderCharList();

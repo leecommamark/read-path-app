@@ -217,7 +217,8 @@ $('importFile').onchange = async () => {
   try { dump = JSON.parse(await f.text()); } catch { alert('Not a Read Path export.'); return; }
   const keys = Object.keys(dump || {}).filter(k => k.startsWith('songpath.'));
   if (!keys.length) { alert('Not a Read Path export.'); return; }
-  if (!confirm(`Replace all progress with ${keys.length} stored keys from “${f.name}”?`)) return;
+  if (!confirm(`Replace all progress with ${keys.length} stored `
+    + `key${keys.length === 1 ? '' : 's'} from “${f.name}”?`)) return;
   await replaceStore(Object.fromEntries(keys.map(k => [k, dump[k]])));
   location.reload();
 };

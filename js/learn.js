@@ -36,10 +36,16 @@ function renderLearnCard() {
   // readability these cards add is the thing the ordering was chosen for.
   const was = coverageOf(covRows);
   const then = coverageOf(covRows, new Set(batch.map(b => keyOf(b.char, b.jp))));
-  $('learnPhase').textContent =
-    `Meet these ${batch.length} cards — then a quick quiz on just them.` +
-    (then > was ? ` They take this text from ${was}% to ${then}% readable.`
-                : ` You can read ${was}% of this text.`);
+  // a batch of one is ordinary, not an edge case: the last cards of a text,
+  // or a lone meaning part. Both halves of the sentence have to agree with it.
+  const meet = batch.length === 1
+    ? 'Meet this card — then a quick quiz on it.'
+    : `Meet these ${batch.length} cards — then a quick quiz on just them.`;
+  $('learnPhase').textContent = meet +
+    (then > was
+      ? ` ${batch.length === 1 ? 'It takes' : 'They take'} this text `
+        + `from ${was}% to ${then}% readable.`
+      : ` You can read ${was}% of this text.`);
   const cur = batch[learnI];
   // A meaning-track item is global — it belongs to no text — so it takes the
   // early exit before anything reads `info`, which is this text's character
@@ -52,8 +58,7 @@ function renderLearnCard() {
     // first review tomorrow, like any freshly acquired card.
     if (!cards[partKey(cur.part)]) mintCard(partKey(cur.part), 0);
     $('learnCard').innerHTML = partCardHtml(semanticOf(cur.part));
-    $('learnPhase').textContent =
-      `Meet these ${batch.length} cards — then a quick quiz on just them.`;
+    $('learnPhase').textContent = meet;
     $('lPos').textContent = `${learnI + 1} / ${batch.length}`;
     $('lPrev').disabled = learnI === 0;
     $('lNext').textContent =
