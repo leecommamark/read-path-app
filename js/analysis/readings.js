@@ -68,8 +68,14 @@ var ANALYSIS = ANALYSIS || {};
         word: w,
         jp: (A.cpLen(w) > 1 ? (A.word(w) || [])[0] : r) || r,
       }));
+      // AND IT MUST HAVE A GLOSS — the mirror of reading_rows.py's gate
+      // (Mark, 2026-09-22). 140 example words had none and shipped a learn
+      // card with an empty meaning line. Python and JS both build this row,
+      // so a filter in one and not the other is a parity failure, which is
+      // exactly how this copy was found.
       const exs = (A.examples(A.key(ch, r)) || [])
-        .map(e => ({word: e[0], jp: e[1], gloss: e[2]}));
+        .map(e => ({word: e[0], jp: e[1], gloss: e[2]}))
+        .filter(e => e.gloss);
       const pair = A.readingGloss(A.key(ch, r));    // [gloss, reading_sense]
       const cg = pair[0];
       let gl;
