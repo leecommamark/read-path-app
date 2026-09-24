@@ -478,3 +478,46 @@ button.linkish { border: 0; background: none; color: var(--ink-3);
   .firstrun-actions, #emptyActions { flex-direction: row; }
   .firstrun-actions button, #emptyActions button { width: auto; }
 }
+
+/* ---------- the meaning screen (plan 13 Phase 3) ---------- */
+/* One row shape for both lists, because a part and a family are the same kind
+   of thing here — something you hold, with a state. Teal is the meaning
+   track's colour and has been since plan 10, so the screen needs no label to
+   say which track it belongs to.
+
+   Phone-first: the row is a flex line that wraps, and the meaning column is
+   the one allowed to shrink (min-width: 0), so a long meaning wraps under
+   itself rather than pushing the state chip off a 360px screen. Nothing here
+   sets a width. */
+#meaningscreen h2 { margin-top: 1.6rem; }
+#toMeaning { min-height: var(--tap); }
+.mp-row { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+          border-bottom: 1px solid var(--hair); padding: .55rem .2rem;
+          min-height: var(--tap); }
+.mp-char { font-size: 1.9rem; line-height: 1.2; color: var(--teal);
+           flex: 0 0 auto; }
+.mp-meaning { flex: 1 1 8rem; min-width: 0; color: var(--ink-2); }
+.mp-state { font-size: .8rem; color: var(--mute-2); flex: 0 0 auto;
+            border: 1px solid var(--rule-2); border-radius: var(--radius);
+            padding: .1rem .5rem; white-space: nowrap; }
+.mp-state.ms-due { color: var(--amber); border-color: var(--amber-2); }
+.mp-state.ms-lapsed { color: var(--red); border-color: var(--wrong-rule); }
+.mp-state.ms-new { color: var(--mute-3); }
+#famSummary { font-variant-numeric: tabular-nums; }
+/* The actions sit at the end of the row and wrap to their own line when the
+   meaning has taken the width — which at 390px is most rows. They are the
+   dashed, quiet treatment "Already know this" already uses on the Learn card,
+   because they are the same kind of secondary action. */
+/* Always their OWN line, right-aligned. At 390px the char, the meaning and the
+   state chip already fill the row, so letting the buttons wrap where they fell
+   made every row a different height and squeezed the meaning to two lines.
+   One line of actions under one line of row is uniform and leaves the meaning
+   the width it needs. */
+.mp-acts { display: flex; gap: .4rem; flex: 1 0 100%;
+           justify-content: flex-end; margin-top: .1rem; }
+.mp-act { background: none; border: 1px dashed var(--dashed); color: var(--mute-0);
+          font-size: .8rem; padding: .2rem .6rem; min-height: var(--tap); }
+/* held-but-not-taught: present, forgettable, and visibly not part of the list
+   above — the shape is quiet rather than teal, since nothing teaches it */
+.mp-held .mp-char { color: var(--mute-2); }
+#heldBlock h3 { margin-bottom: .2rem; }

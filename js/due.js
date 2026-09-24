@@ -18,10 +18,30 @@ function dueKeys() {
     .sort((a, b) => cards[a].due - cards[b].due);
 }
 
+// A DUE card the deck can actually put in front of the learner. A form-of
+// card always can — askPart falls back to the re-reading when it cannot build
+// a question — but a family stops being askable the moment nothing in it can
+// be a target, and `askTellApart` skips such an item without touching the
+// card. Skipped and still due is a card that is counted for ever and never
+// asked: delete every sound card and the button reads "Daily review (252)"
+// while the deck opens, skips all 252 and says nothing is due (plan 13).
+//
+// The filter lives HERE, in the one function the button and the deck both
+// call, so the two cannot drift apart again — which is the bug plan 10.1
+// Phase 3 fixed by making the button count both tracks.
+//
+// Unknown counts as askable. Without the tables loaded there is no way to
+// tell a live family from a dead one, and the library is deliberately not a
+// door — `scheduleFamilies` is a no-op there while MEANING is null — so a
+// cold render must not hide a scheduled card behind a table that has not
+// arrived. That would be "Daily review (0)" again, from the other direction.
+const famAskable = head => !meaningIndex() || familyQuizzable(head);
+
 function dueMeaningKeys() {
   const now = Date.now();
   return Object.keys(cards)
-    .filter(k => isMeaningKey(k) && cards[k].due <= now)
+    .filter(k => isMeaningKey(k) && cards[k].due <= now
+                 && (meaningKind(k) !== 'fam' || famAskable(meaningOf(k))))
     .sort((a, b) => cards[a].due - cards[b].due);
 }
 
@@ -41,6 +61,19 @@ function dueBreakdown(keys) {
           .filter(Boolean).join(' · ');
 }
 
+// CALENDAR days, not elapsed ones. "in 2 days" for something 30 hours off
+// is arithmetically true and is not what a learner reads it as; the
+// question they are asking is which morning to come back on. Local
+// midnight to local midnight, which is also what the ladder's own day
+// boundaries feel like from the outside.
+//
+// One definition, because the meaning screen says the same thing per card
+// (plan 13 Phase 3) and two of these would drift a day apart at midnight.
+const midnight = t => { const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+const calendarDays = (to, from) =>
+  Math.round((midnight(to) - midnight(from === undefined ? Date.now() : from)) / DAY);
+
 // The soonest `due` still ahead of us, across BOTH tracks — reduced rather
 // than spread, because a library's card count is in the thousands and
 // Math.min(...keys) is a stack overflow waiting for a big enough learner.
@@ -50,14 +83,7 @@ function nextDueText() {
   for (const k in cards) if (cards[k].due > now && cards[k].due < soonest)
     soonest = cards[k].due;
   if (soonest === Infinity) return '';
-  // CALENDAR days, not elapsed ones. "in 2 days" for something 30 hours off
-  // is arithmetically true and is not what a learner reads it as; the
-  // question they are asking is which morning to come back on. Local
-  // midnight to local midnight, which is also what the ladder's own day
-  // boundaries feel like from the outside.
-  const midnight = t => { const d = new Date(t);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
-  const days = Math.round((midnight(soonest) - midnight(now)) / DAY);
+  const days = calendarDays(soonest, now);
   return days <= 0 ? 'Your next card falls due later today.'
        : days === 1 ? 'Your next card falls due tomorrow.'
        : `Your next card falls due in ${days} days.`;

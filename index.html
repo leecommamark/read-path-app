@@ -19,6 +19,13 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#06529c">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <!-- Declared, or every browser falls back to asking for /favicon.ico and
+       getting a 404: the icons are named by the manifest and by the line
+       above, and neither is where a TAB looks. The home-screen icon has never
+       depended on this. Points at the same 192 the rest points at, so
+       whenever the placeholder from make_icons.py is replaced by something
+       drawn (plan 11 section C), this follows without being touched. -->
+  <link rel="icon" href="icons/icon-192.png">
 </head>
 <body>
 
@@ -116,6 +123,7 @@
     <button id="charsBack">← texts</button>
     <h1 lang="en" style="flex:1">Your characters</h1>
   </div>
+  <p><button id="toMeaning">Meaning parts &amp; families →</button></p>
   <div id="placement">
     <b>Placement test</b>
     <p class="hint" lang="en">Seven levels of 2–3 quick questions homing in on how much
@@ -136,6 +144,35 @@
     pronounce it. The list is the project's learning order, easiest first.
     <button id="deselectAll" style="margin-left:.6rem">Deselect all</button></p>
   <div id="charTokens"></div>
+</div>
+
+<div id="meaningscreen" style="display:none">
+  <div style="display:flex; align-items:center; gap:.8rem">
+    <button id="meaningBack">← characters</button>
+    <h1 lang="en" style="flex:1">Meaning parts</h1>
+  </div>
+  <p class="hint" lang="en">The shape inside a character that carries its
+    meaning — 氵 water, 辶 movement. The track teaches the squeezed ones,
+    which are never written alone, and asks which character has the part.</p>
+  <div id="partRows"></div>
+  <p class="hint" id="partsHint" lang="en" style="display:none">Marking a part
+    known can add tell-apart questions for the families it turns on — those
+    are what knowing it unlocks, so your Daily review count may go up.</p>
+  <div id="heldBlock" style="display:none">
+    <h3 lang="en">Also held</h3>
+    <p class="hint" lang="en">Cards for shapes the track does not teach — left
+      by an older version of the tables, or by an import. Nothing will quiz
+      them, so there is nothing to know; forgetting one is safe.</p>
+    <div id="heldRows"></div>
+  </div>
+  <h2 lang="en">Tell-apart families</h2>
+  <p class="hint" lang="en">Characters that share a sound and are told apart
+    by their meaning parts — “cing1 楚, which cing1?”. One card per family,
+    drawing a fresh question each review. Listed here when there is something
+    to do with one.</p>
+  <p id="famSummary" class="hint" lang="en"></p>
+  <p><button id="famReset" style="display:none">Reset all tell-apart cards</button></p>
+  <div id="famRows"></div>
 </div>
 
 <div id="due" style="display:none">
@@ -261,6 +298,7 @@
 <script src="js/lrc.js"></script>
 <script src="js/library.js"></script>
 <script src="js/chars.js"></script>
+<script src="js/meaning.js"></script>
 <script src="js/due.js"></script>
 <script src="js/text.js"></script>
 <script src="js/calibrate.js"></script>

@@ -104,24 +104,41 @@ $('lNext').onclick = () => {
   startQuiz(batch, 'learnQuizSlot', () => startLearn());
 };
 
-// secondary action: this exact (character, reading) pair is already known.
+// A batch item's card key, which depends on its KIND. A meaning item has no
+// character and no reading, so `keyOf(cur.char, cur.jp)` on one is the string
+// `"undefined:"` — a key `isMeaningKey` cannot filter, `rebuildKnown` reads as
+// a character called "undefined", and the Due deck hands to the quiz as a
+// sound card. That is what this button did to every form-of card until plan
+// 13 Phase 1.
+const itemKey = it => it.part ? partKey(it.part) : keyOf(it.char, it.jp);
+
+// secondary action: this exact (character, reading) pair is already known —
+// or, on a form-of card, this shape's meaning is. One button, because it is
+// one promise: leave the batch at the mature rung. Marking a PART known can
+// make its families quizzable at the next door, which is correct and is what
+// the meaning screen says out loud beside the same action.
 // Mints at the mature rung, leaves the batch, and the batch refills from the
-// unacquired pool (same ordering startLearn uses). Undo restores the card
-// snapshot and the batch as it stood, current position included.
+// unacquired pool (same ordering startLearn uses) — which is sound-track, so
+// a part that leaves is not replaced by another part; meaningForBatch decides
+// that at startLearn. Undo restores the card snapshot and the batch as it
+// stood, current position included.
 $('lKnow').onclick = () => {
   const cur = batch[learnI];
   if (!cur) return;
-  const key = keyOf(cur.char, cur.jp);
+  const key = itemKey(cur);
   const snap = {key, card: cards[key] ? {...cards[key]} : null,
                 batch: batch.slice(), learnI};
-  mintCard(key, MATURE_RUNG);
+  if (cur.part) knowPart(cur.part); else mintCard(key, MATURE_RUNG);
   batch.splice(learnI, 1);
-  const have = new Set(batch.map(b => keyOf(b.char, b.jp)));
+  const have = new Set(batch.map(itemKey));
   for (const k of unacquiredKeys()) {
     if (batch.length >= BATCH) break;
     if (!have.has(keyOf(k.char, k.jp))) batch.push({char: k.char, jp: k.jp});
   }
-  showUndo(`${cur.char} ${cur.jp} marked known`, snap, s => {
+  // what was marked, in the words the card used for it: a meaning part is not
+  // a reading, and "辶 marked known" would claim the learner can read 辶
+  showUndo(cur.part ? `meaning part ${cur.part} marked known`
+                    : `${cur.char} ${cur.jp} marked known`, snap, s => {
     if (s.card) cards[s.key] = s.card; else delete cards[s.key];
     saveCards();
     batch = s.batch; learnI = s.learnI;

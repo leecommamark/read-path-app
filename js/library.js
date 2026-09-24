@@ -59,7 +59,8 @@ function coverageOfLines(lines) {
 }
 
 function show(screen) {
-  for (const s of ['library', 'charscreen', 'due', 'text', 'howitworks'])
+  for (const s of ['library', 'charscreen', 'meaningscreen', 'due', 'text',
+                   'howitworks'])
     $(s).style.display = s === screen ? '' : 'none';
 }
 

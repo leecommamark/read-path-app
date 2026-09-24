@@ -45,15 +45,19 @@ function renderCharList() {
       data-jp="${esc(c.reading || '')}"
       title="#${c.rank} ${esc(c.reading || '?')} — ${esc(c.gloss || '')}">${esc(c.char)}</span>`).join('');
 }
-// Sound-track cards only, and the count says the same. This button sits under
-// a grid of 3,000 characters and offers to clear it; the meaning track has no
-// surface here, and silently deleting progress a screen does not show is
-// worse than leaving it. Plan 10 Phase 5.
+// Sound-track cards only, and the count and the wording both say so. This
+// button sits under a grid of 3,000 characters and offers to clear it, so its
+// scope is that grid — which is the principle plan 10 Phase 5 was reaching
+// for when it wrote "silently deleting progress a screen does not show is
+// worse than leaving it". That reasoning held while the meaning track had
+// nowhere of its own; since plan 13 it has a screen, and each surface clears
+// what it shows.
 $('deselectAll').onclick = () => {
   const keys = Object.keys(cards).filter(k => !isMeaningKey(k));
   if (!keys.length) return;
-  if (!confirm(`Delete all ${keys.length} review card${keys.length === 1 ? '' : 's'}? `
-    + 'This wipes the SRS schedule for every text.')) return;
+  if (!confirm(`Delete all ${keys.length} character card${keys.length === 1 ? '' : 's'}? `
+    + 'This wipes the reading schedule for every text. Meaning parts and '
+    + 'tell-apart families have their own screen and are not touched.')) return;
   for (const k of keys) delete cards[k];
   saveCards();
   renderCharList();

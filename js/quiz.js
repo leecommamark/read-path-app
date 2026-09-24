@@ -503,8 +503,19 @@ function presentPart(cur) {
 function askTellApart(cur) {
   const item = tellApartItem(cur.fam);
   // a family can stop being quizzable between scheduling and asking — a
-  // lapsed form-of card is the ordinary way. Skip rather than show nothing.
-  if (!item) { quiz.queue.shift(); return nextQuestion(); }
+  // lapsed form-of card is the ordinary way, and `p10-8b5` holds the two
+  // predicates in step for the shipped table in the state it can check.
+  // Skip rather than show nothing, and PARK it: a day out, rung, lapses and
+  // `added` untouched. Skipping alone left the card due, so it came back to
+  // be skipped again on every deck, counted every time and asked none of
+  // them; parking takes it out of the count until something changes, without
+  // deleting scheduling history that is the learner's (plan 13 Phase 2).
+  if (!item) {
+    const c = cards[famKey(cur.fam)];
+    if (c) { c.due = Date.now() + DAY; saveCards(); }
+    quiz.queue.shift();
+    return nextQuestion();
+  }
   quiz.ta = item;
   $('qprogress').textContent =
     `${quiz.queue.length} to go · which character is it?`;

@@ -349,7 +349,11 @@ function meaningIndex() {
       needs.get(m[1]).push(m[0]);
     }
   }
-  return (MEANING.__ix = {cardable, needs});
+  // head -> its tellapart row. familyQuizzable ran `.find` over all 307 rows
+  // on every call, which was nothing while only a Learn batch called it and
+  // is 252 scans of 307 once the due count does (plan 13 Phase 2).
+  const rows = new Map(MEANING.tellapart.map(r => [r[0], r]));
+  return (MEANING.__ix = {cardable, needs, rows});
 }
 
 // The parts whose moment has come: a family that needs them holds a character
@@ -374,8 +378,8 @@ function newMeaningParts(upcoming) {
 // one other member to tell it from. The card is per FAMILY, not per item —
 // each review draws a fresh target, so nobody memorises one question.
 function familyQuizzable(head) {
-  const row = MEANING && Array.isArray(MEANING.tellapart)
-    && MEANING.tellapart.find(r => r[0] === head);
+  const ix = meaningIndex();
+  const row = ix && ix.rows.get(head);
   if (!row || !row[1] || row[2].length < 2) return false;
   return row[2].some(m => metChar(m[0]) && isPartKnown(m[1]));
 }
@@ -453,7 +457,8 @@ function semanticOf(ch) {
 // Has the learner met this character at all? Any card, even a lapsed one —
 // "met" is weaker than "known" on purpose: the tell-apart quiz asks you to
 // tell 清 from 晴, which is a fair question the moment you have seen both.
-const metChar = ch => cardsOf(ch).length > 0;
+// Derived by rebuildKnown, which walks the cards anyway — see `metChars`.
+const metChar = ch => metChars.has(ch);
 
 // Has the meaning part been introduced? A squeezed shape is introduced by its
 // form-of card; a full character (木 言 女 虫) by being known as a character,
@@ -463,6 +468,28 @@ function isPartKnown(ch) {
   const c = cards[partKey(ch)];
   if (c && !(c.rung === 0 && c.lapses > 0 && c.due <= Date.now())) return true;
   return isKnownChar(ch);
+}
+
+// The learner saying they already know what a shape means — from the Learn
+// card's secondary action, and from the meaning screen's row. One helper
+// because the two are one promise, and a mature rung written in two places
+// is a promise that can drift. MATURE_RUNG is the same 30 d entry the
+// placement test and "Already know this" give a character.
+//
+// It mints and no more. Families become quizzable off the back of it, since
+// isPartKnown gates familyQuizzable — but noticing that is a DOOR's job, and
+// the caller with a screen to redraw runs scheduleFamilies itself.
+//
+// It NEVER DOWNGRADES, which is the placement test's rule in its own words
+// ("never downgrade an existing card") and matters here because the mature
+// rung is 30 days and a part the learner has answered right four times is at
+// 90 or 180. Saying "I know this" about it must not cost them those months.
+// Returns whether it did anything, so a caller can say so.
+function knowPart(ch) {
+  const c = cards[partKey(ch)];
+  if (c && c.rung >= MATURE_RUNG) return false;
+  mintCard(partKey(ch), MATURE_RUNG);
+  return true;
 }
 
 function migrateBoundForms() {
@@ -1103,17 +1130,28 @@ const newCard = rung => ({rung, due: Date.now() + LADDER[rung] * DAY,
 // "known" is derived, never stored: a card that exists and is not
 // lapsed-pending (a lapse keeps the card but brings the scaffolding back
 // until it is answered right again)
-let knownKeys = new Set(), knownChars = new Set();
+//
+// `metChars` is the WEAKER set beside it, and the whole reason this walk
+// grew a third: a character is met if it has any card at all, lapsed or not,
+// because the tell-apart quiz asks you to tell 清 from 晴 and that is a fair
+// question the moment you have seen both. It was `cardsOf(ch).length > 0` —
+// Object.keys over every card, per character asked about — and plan 13 Phase
+// 2 put the quizzability of 252 families in the library's render path, where
+// that cost 286 ms at 3,000 cards. This loop already visits every card, so
+// the set is free and `metChar` becomes a lookup.
+let knownKeys = new Set(), knownChars = new Set(), metChars = new Set();
 function rebuildKnown() {
-  knownKeys = new Set(); knownChars = new Set();
+  knownKeys = new Set(); knownChars = new Set(); metChars = new Set();
   const now = Date.now();
   for (const [k, c] of Object.entries(cards)) {
-    if (c.rung === 0 && c.lapses > 0 && c.due <= now) continue;
     // A meaning-track card is not knowledge of a character — knowing what 辶
     // MEANS is not being able to read 辶 — and knownChars drives the
     // Characters grid, the coverage meter and charStats. Left in, the first
-    // form-of card would have added the string "@part" to it.
+    // form-of card would have added the string "@part" to it. This test leads
+    // now, because `met` has to see a lapsed card and `known` must not.
     if (isMeaningKey(k)) continue;
+    metChars.add(k.slice(0, k.indexOf(':')));
+    if (c.rung === 0 && c.lapses > 0 && c.due <= now) continue;
     knownKeys.add(k);
     knownChars.add(k.slice(0, k.indexOf(':')));
   }
