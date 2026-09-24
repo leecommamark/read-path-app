@@ -181,7 +181,7 @@ function readingSection(cur, r, c, due) {
       : v.examples?.[0]
         ? `${esc(v.examples[0].word)} <span class="lc-exjp">${esc(v.examples[0].jp)}</span>`
         : '';
-    return `<div class="lc-var">變調 <span class="lc-exjp">${esc(v.jp)}</span>${ws ? ` in ${ws}` : ''}</div>`;
+    return `<div class="lc-var"><b>變調</b> changed tone <span class="lc-exjp">${esc(v.jp)}</span>${ws ? ` in ${ws}` : ''}</div>`;
   }).join('');
   const line = contextLineHtml(r, due);
   return `<div class="lc-reading${r.jp === cur.jp ? ' own' : ''}">

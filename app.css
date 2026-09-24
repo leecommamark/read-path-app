@@ -300,7 +300,11 @@
   .lc-reading:not(.own) .lc-gloss { font-size: .9rem; }
   .lc-reading .intext { color: var(--green); font-size: 1.15rem; }
   .lc-exjp { color: var(--blue); font-size: .85rem; }
+  /* the changed-tone note inside a base reading's section; the term is
+     glossed in English like the formation captions, and lifted out of the
+     muted gloss the same way */
   .lc-var { font-size: .82rem; color: var(--mute-2); margin-top: .2rem; }
+  .lc-var b { color: var(--mute); font-weight: 600; }
   /* what the row below is — "Words using it" / "In the text"; follows the
      card's own alignment (centred on the learn card, left in feedback) */
   .lc-label { font-size: .7rem; letter-spacing: .05em; text-transform: uppercase;

@@ -10,11 +10,15 @@ var ANALYSIS = ANALYSIS || {};
   'use strict';
 
   // the sheet's curated phonetic column outranks Wiktionary: a character with
-  // a phonetic component is phono-semantic whatever the page says
+  // a phonetic component is phono-semantic whatever the page says — and with
+  // NO sound part in hand the page's own `phonosemantic` is dropped, because
+  // the caption it prints is "形聲 sound + meaning" and there is nothing to
+  // point at. The server half is pathbuilder.py:formation_type.
   function formationType(ch, family) {
     if (family && family !== ch) return 'phonosemantic';
     const r = A.charRow(ch);
-    return (r && r.f) || 'unknown';
+    const f = (r && r.f) || 'unknown';
+    return f === 'phonosemantic' ? 'unknown' : f;
   }
 
   function familyOf(ch) {
