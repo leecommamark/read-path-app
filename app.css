@@ -258,7 +258,6 @@
   .lp-part { font-size: 1.9rem; line-height: 1.25;
              border-bottom: 2px solid transparent; }
   .lp-part.met { color: var(--green-3); border-bottom-color: var(--green-2); }
-  .dt-layout { font-size: .78rem; color: var(--mute-3); margin-top: .15rem; }
   /* the cue: a full-width tap target, because it is the card's own verb and
      the thumb should not have to find it */
   .lc-more { min-height: var(--tap); width: 100%; margin-top: .8rem;

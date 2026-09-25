@@ -40,18 +40,11 @@ function mnemonicBlock(c) {
   return `${cap}${tree}${cousinLine(c)}`;
 }
 
-// The caption on its own. The staged card (Phase 3) shows it a beat before
-// the tree it introduces — "how they sit together" precedes "which one is the
-// sound" — so the two halves of the mnemonic block are separable here rather
-// than duplicated there.
+// The caption on its own, so the staged card can lead its roles beat with it
+// without duplicating `mnemonicBlock`, which still draws caption and tree
+// together for the quiz feedback card.
 const formationCaption = c =>
   FORMATION_NAMES[c.type] ? `<div class="dt-caption">${FORMATION_NAMES[c.type]}</div>` : '';
-
-// `layout` is the server's word for how the parts are arranged — "left →
-// right", "outside → inside". It has never been drawn; the staged card is
-// where it belongs, because that beat is exactly the question it answers.
-const layoutLine = c =>
-  c.layout ? `<div class="dt-layout">${esc(c.layout)}</div>` : '';
 
 // Only when the server sent cousins: the phonetic's own reading is no clue to
 // this character's sound, so name the series members that are — "like 黨 dong2
@@ -290,14 +283,24 @@ function partCardHtml(row) {
 // step, and Mark's complaint about the track ("acknowledging its existence is
 // not learning it") applies to a card as much as to a question.
 //
-// So the same card, revealed in order: the parts you have already met → how
-// they sit together → which part carries the sound and what it sounds like →
-// the reading → the character in a word. NOT a second card design — every
-// beat below is a piece this file already drew, moved rather than rewritten,
-// and a fully revealed staged card holds exactly what the old card held.
+// So the same card, revealed in order: the parts you have already met → which
+// of them carries the sound, and what it sounds like → the reading → the
+// character in a word. NOT a second card design — every beat below is a piece
+// this file already drew, moved rather than rewritten, and a fully revealed
+// staged card holds exactly what the old card held.
+//
+// THERE WAS A FIFTH BEAT AND IT WAS EMPTY. "How do they fit together?" drew
+// the formation caption and the `layout` line — "left → right" — a tap before
+// the tree that explains them. Mark, on the device check: most characters are
+// two parts, and they are already side by side in that order, so the beat
+// asked a question whose answer was on the screen. It is true of every
+// arrangement and not only the common one — you can SEE that 或 sits inside
+// 囗 — so `layout` is not drawn at all any more, which is where it was before
+// this plan. The caption is not redundant (that a character is 形聲 is not
+// visible) and it now leads the beat that acts on it: one idea, one tap.
 //
 // An empty beat is dropped rather than shown blank, so the sequence is as
-// long as the character has something to say: 清 climbs all five, 人 — a
+// long as the character has something to say: 清 climbs all four, 人 — a
 // pictogram with nothing to decompose — has its caption, its reading and its
 // word, and the card is three beats rather than a wall with three holes.
 
@@ -348,9 +351,8 @@ function cardStages(cur, c, due) {
   const sec = only => secs.map(r => readingSection(cur, r, c, due, only)).join('');
   return [
     {cue: '', html: partsRow(c)},
-    {cue: 'How do they fit together?', html: formationCaption(c) + layoutLine(c)},
     {cue: sound ? 'Which part gives the sound?' : 'What do the parts mean?',
-     html: decompTree(c.decomp) + cousinLine(c)},
+     html: formationCaption(c) + decompTree(c.decomp) + cousinLine(c)},
     {cue: 'What is the reading?', html: sec('reading')},
     {cue: 'Show it in a word', html: sec('words') + seriesBlock(c)},
   ].filter(s => s.html.trim());
