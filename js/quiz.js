@@ -13,13 +13,7 @@ const sessionStreaks = new Map();
 // Review pool is 1,135 on a long text, and counting it down was a promise the
 // app could not keep (plan 7 Phase 1).
 function startQuiz(keys, slot, onDone, due, whole) {
-  // `dvAsked` is the derivation's "once per run per card" set (plan 12 Phase
-  // 4). A free question cannot end a queue — the learn quiz requeues a card
-  // until it is acquired, and a question that never mints would requeue it
-  // for ever — so the derivation is the FIRST ask about a card and the
-  // ordinary question is every one after it. Which is also the right shape
-  // for a card that grades: the guess, then the test.
-  quiz = {queue: [...keys], onDone, due, whole, done: 0, dvAsked: new Set()};
+  quiz = {queue: [...keys], onDone, due, whole, done: 0};
   $(slot).appendChild($('quizbox'));
   $('quizbox').style.display = '';
   nextQuestion();
@@ -44,7 +38,7 @@ function contextWord(cur) {
 // fallback context: the reading's dictionary example word, shaped like a
 // line part so the renderer needn't care where the word came from
 function exampleWord(cur) {
-  const r = rowOf(cur)?.readings?.find(x => x.jp === cur.jp);
+  const r = info[cur.char]?.readings?.find(x => x.jp === cur.jp);
   const ex = r && dictExamples(r)[0];
   if (!ex) return null;
   const syls = ex.jp.split(' ');
@@ -91,11 +85,11 @@ function renderQWord(w, cur) {
 
 function makeChoices(cur, w) {
   const correct = cur.jp;
-  const own = (rowOf(cur)?.readings || []).filter(r => !r.variant_of)
+  const own = (info[cur.char]?.readings || []).filter(r => !r.variant_of)
     .map(r => r.jp).filter(r => r && r !== correct);
   const ownSet = new Set(own);
   // the target's own 變調 forms are half-right answers — never offer them
-  const ownVar = new Set((rowOf(cur)?.readings || [])
+  const ownVar = new Set((info[cur.char]?.readings || [])
     .filter(r => r.variant_of).map(r => r.jp));
   // a choice equal to a visible neighbour's jyutping would give itself away
   const visible = new Set((w ? w.chars : [])
@@ -125,7 +119,7 @@ let answered = false;
 
 function nextQuestion() {
   answered = false;
-  quiz.ta = quiz.pt = quiz.dv = null;
+  quiz.ta = quiz.pt = null;
   $('feedback').style.display = 'none'; $('qnext').style.display = 'none';
   if (!quiz.queue.length) { $('quizbox').style.display = 'none'; quiz.onDone(); return; }
   const cur = quiz.queue[0];
@@ -135,8 +129,6 @@ function nextQuestion() {
   if (cur.part) return askPart(cur);
   if (cur.fam) return askTellApart(cur);
   if (quiz.due) dueContext(cur);
-  const dv = quiz.dvAsked.has(keyOf(cur.char, cur.jp)) ? null : deriveItem(cur);
-  if (dv) return askDerive(cur, dv);
   const w = quiz.w = contextWord(cur) || exampleWord(cur);
   $('qprogress').textContent = (quiz.whole
     ? `${quiz.done} answered · ${coverageOf(covRows)}% readable`
@@ -156,7 +148,7 @@ function answer(btn) {
   quiz.done++;
   const cur = quiz.queue[0];
   const key = keyOf(cur.char, cur.jp);
-  const c = rowOf(cur);
+  const c = info[cur.char];
   const right = btn.dataset.r === cur.jp;
   document.querySelectorAll('#qchoices button').forEach(b => {
     if (b.dataset.r === cur.jp) b.classList.add('right');
@@ -164,24 +156,9 @@ function answer(btn) {
     b.disabled = true;
   });
   const hadCard = !!cards[key];
-  // A DERIVATION AT AN UNMET CHARACTER IS FREE, BOTH WAYS (decision 12-iii).
-  // Wrong costs nothing, because a guess that is punished is a guess a
-  // learner stops making and the whole point is to get them guessing. Right
-  // earns nothing either, and that half is not generosity: the head's reading
-  // is on the screen, so deriving cing1 from 青 is a strictly easier question
-  // than the plain one, and letting it mint would put 清 in `knownChars`, in
-  // the Characters grid and in the "12% readable" meter on the strength of a
-  // guess. The meter has to stay honest, so the guess teaches and the plain
-  // question that follows it decides.
-  //
-  // Once the character IS taught the card exists, and then this is an
-  // ordinary review that walks the ladder like any other — a second question
-  // shape for the same card, which is the tell-apart quiz's own reasoning
-  // for drawing a fresh target every time.
-  const free = !!quiz.dv && !hadCard;
   if (hadCard) {
     gradeCard(key, right);                    // a real review — walk the ladder
-  } else if (!free) {
+  } else {
     sessionStreaks.set(key, right ? (sessionStreaks.get(key) || 0) + 1 : 0);
     if (right && sessionStreaks.get(key) >= 2)
       mintCard(key, 0);                       // acquired — first review tomorrow
@@ -192,8 +169,7 @@ function answer(btn) {
     else quiz.queue.push(cur);                // wrong → the back, never next-up
   }
   let note = '';
-  if (free) note = right ? ' — a good guess, and the right one' : ' — a free guess, and nothing lost by it';
-  else if (right && hadCard) note = ` — next review in ${LADDER[cards[key].rung]} d`;
+  if (right && hadCard) note = ` — next review in ${LADDER[cards[key].rung]} d`;
   else if (right && cards[key]) note = ' — acquired! first review tomorrow';
   else if (right) note = ' — once more to acquire it';
   else if (hadCard) note = ' — back to the start of the ladder';
@@ -207,7 +183,6 @@ function answer(btn) {
     ${note}
     ${rrow ? readingSection(cur, rrow, c, !!quiz.due)
            : `<div class="f-meta">${esc(c?.gloss || '')}</div>`}
-    ${quiz.dv ? deriveWhyHtml(quiz.dv) : ''}
     ${c ? mnemonicBlock(c) : ''}`;
   $('qnext').style.display = '';
   $('qnext').focus();
@@ -576,110 +551,4 @@ function answerTellApart(btn) {
     ${tellApartWhyHtml(item)}`;
   $('qnext').style.display = '';
   $('qnext').focus();
-}
-
-// ---------- the derivation (plan 12 Phase 4) ----------
-// The one question a re-ordering could not deliver: "you know 青 is cing1 —
-// what do you think 清 is?". Everything else in this plan puts the sound part
-// in front of the learner; this asks them to USE it, which is the only step
-// that proves the method landed rather than being admired.
-//
-// It is not a third question shape. It is the SOUND question with a different
-// prompt: the answer is still the character's reading and the choices are
-// still readings, so `answer()` grades it and every door that asks the sound
-// question asks this one. What changes is what the learner is given to go on
-// — the head and its reading instead of a context word — and what an answer
-// costs, which is `free` in `answer()`.
-const DV_CHOICES = 4;
-
-function deriveItem(cur) {
-  const ix = meaningIndex();
-  const row = ix && ix.derives.get(cur.char);
-  if (!row) return null;
-  const [head, , members, headReading] = row;
-  // THE PREMISE HAS TO BE TRUE. "You know 青 is cing1" may only be said to a
-  // learner who has met 青 — which since Phase 2b is what the pin arranges,
-  // and is why the pin had to come first. `metPart` rather than `isKnownKey`
-  // for the same reason the staged card uses it: a head that left the
-  // learning order has no character card to be known through.
-  if (head === cur.char || !metPart(head)) return null;
-  const me = members.map(asMember).find(m => m.char === cur.char);
-  // the reading the family teaches, and the reading this card asks for, must
-  // be the same one — a polyphonic character read some other way here is a
-  // character the head says nothing about
-  if (!me || me.reading !== cur.jp) return null;
-  // THE NAIVE GUESS LEADS THE DISTRACTORS. Where the target does not share
-  // the head's tone, the head's own reading is the answer the method gives
-  // and the answer that is wrong — 情 is cing4, not cing1 — and having it on
-  // the row is how the learner finds out that the part carries the syllable
-  // and not the tone. Being wrong here costs nothing, which is exactly what
-  // makes that a lesson rather than a trap.
-  const family = shuffle(members.map(m => m[4]).filter(r => r && r !== cur.jp));
-  const picks = [];
-  for (const r of [headReading, ...family])
-    if (r && r !== cur.jp && !picks.includes(r) && picks.length < DV_CHOICES - 1)
-      picks.push(r);
-  // A COHERENT FAMILY IS A FAMILY WITH FEW DISTRACTORS — 侖's members all
-  // read leon4 — so 186 of the 327 askable characters cannot fill the row
-  // from their siblings. The tones of the target's own syllable fill it, the
-  // way `makeChoices` has always filled a short row, and they are the right
-  // filler here: the tone is the part of the reading the method cannot give.
-  const base = syllableOf(cur.jp);
-  for (let t = 1; picks.length < DV_CHOICES - 1 && t <= 6; t++)
-    if (base + t !== cur.jp && !picks.includes(base + t)) picks.push(base + t);
-  if (picks.length < DV_CHOICES - 1) return null;
-  return {head, headReading, target: me, members: members.map(asMember),
-          choices: shuffle([cur.jp, ...picks])};
-}
-
-function askDerive(cur, item) {
-  quiz.dv = item;
-  quiz.w = null;
-  quiz.dvAsked.add(keyOf(cur.char, cur.jp));
-  // the plain question's own progress line, because this IS the plain
-  // question: the Review tab must not count down — its pool is 1,135 on a
-  // long text and counting it was a promise the app could not keep (plan 7
-  // Phase 1) — and the derivation is the one new question shape that reaches
-  // that tab, where the tell-apart and form-of questions never do.
-  $('qprogress').textContent = (quiz.whole
-    ? `${quiz.done} answered · ${coverageOf(covRows)}% readable`
-    : `${quiz.queue.length} to go`) + ` · what do you think it says?`;
-  // the ask, then the target on the sound quiz's own card with its jyutping
-  // blanked — the same slot the plain question blanks, so the learner is
-  // being asked the same thing by a different route
-  $('qword').innerHTML =
-    `<span class="dq-ask" lang="en">You know <b>${esc(item.head)}</b> is ` +
-    `<b>${esc(item.headReading)}</b>. What do you think this one says?</span>` +
-    qwCard(cur.char, '', 'target');
-  $('qchoices').innerHTML = item.choices.map(r =>
-    `<button data-r="${esc(r)}">${esc(r)}</button>`).join('');
-  document.querySelectorAll('#qchoices button').forEach(b =>
-    b.onclick = () => answer(b));
-}
-
-// after an answer: the head, then the family it heads, said. The tell-apart
-// explanation's own furniture — `.ta-why` and its head line — because it is
-// the same fact seen from the other side: there the four share 青 and the
-// meaning parts tell them apart, here 青 is the clue and the readings are
-// what it does and does not settle. Members that do NOT follow the head are
-// left out: this panel is the evidence for the method, and 靚 leng3 is
-// evidence against it that the question was careful not to ask about.
-const DV_SHOWN = 6;
-function deriveWhyHtml(item) {
-  const hs = syllableOf(item.headReading);
-  const kin = item.members.filter(m => m.syllable === hs && m.reading)
-    .sort((a, b) => (b.char === item.target.char) - (a.char === item.target.char))
-    .slice(0, DV_SHOWN);
-  return `<div class="ta-why">
-    <div class="ta-head">
-      <span class="ta-head-label" lang="en">the sound part</span>
-      <span class="ta-head-char">${esc(item.head)}</span>
-      <span class="ta-head-jp">${esc(item.headReading)}</span>
-    </div>
-    ${kin.map(m => `
-      <div class="ta-row${m.char === item.target.char ? ' ta-is' : ''}">
-        <span class="ta-char">${esc(m.char)}</span>
-        <span class="ta-jp">${esc(m.reading)}</span>
-        <span class="ta-cg" lang="en">${esc(m.gloss || '')}</span>
-      </div>`).join('')}</div>`;
 }

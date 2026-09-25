@@ -353,21 +353,7 @@ function meaningIndex() {
   // on every call, which was nothing while only a Learn batch called it and
   // is 252 scans of 307 once the due count does (plan 13 Phase 2).
   const rows = new Map(MEANING.tellapart.map(r => [r[0], r]));
-  // character -> its family row, for the characters the DERIVATION question
-  // may be put about (plan 12 Phase 4). Two gates, and both are needed.
-  // `row[4]` is the build's: may this family ask at all — 斤 gives bing1 gan6
-  // jan1 kei4 si1 sik1 and never may. The syllable test is this one's: even
-  // inside a family that may ask, 青 is no clue to 靚 leng3 or 猜 caai1, and
-  // a question whose answer the method gets WRONG teaches the opposite of
-  // the method. What is left is the honest case — the part gives you the
-  // syllable — and the tone it cannot give you is what the question is for.
-  const derives = new Map();
-  for (const row of MEANING.tellapart) {
-    if (!row[4]) continue;
-    const hs = syllableOf(row[3]);
-    for (const m of row[2]) if (m[5] === hs) derives.set(m[0], row);
-  }
-  return (MEANING.__ix = {cardable, needs, rows, derives});
+  return (MEANING.__ix = {cardable, needs, rows});
 }
 
 // The parts whose moment has come: a family that needs them holds a character
@@ -474,20 +460,6 @@ function semanticOf(ch) {
 // Derived by rebuildKnown, which walks the cards anyway — see `metChars`.
 const metChar = ch => metChars.has(ch);
 
-// a reading with its tone off — pathbuilder._syllable, which is what the
-// shipped `syllable` column on every family member was cut with
-const syllableOf = jp => (jp || '').replace(/\d+$/, '');
-
-// Has the learner met this character AS A PART — met it as a character, or
-// been given the meaning track's form-of card for it? The staged card (plan
-// 12 Phase 3) asks about 氵 辶 and the rest, which have no character card to
-// be met through and never will: plan 10 took them out of the learning order
-// precisely because 辶's "caang1" is a reading no dictionary attests. Met is
-// still the weak sense — a lapsed card counts, exactly as `metChar` has it —
-// because the card only says "you've seen this before", never that they know
-// it. `isPartKnown` is the strong one beside it and gates a quiz; this gates
-// a sentence.
-const metPart = ch => metChar(ch) || !!cards[partKey(ch)];
 
 // Has the meaning part been introduced? A squeezed shape is introduced by its
 // form-of card; a full character (木 言 女 虫) by being known as a character,
@@ -1068,26 +1040,13 @@ async function charRowFor(ch) {
   return row;
 }
 
-// THE ROW A SURFACE SHOULD DRAW FROM. This text's table where the character
-// is in this text, and the item's own row where it is not — which since plan
-// 12 Phase 2b is an ordinary state rather than an edge one: a sound part is
-// put in front of a learner reading a text that does not contain it. Every
-// surface that reaches for the TARGET's readings goes through here, so none
-// of them has to know which kind of item it was handed. Neighbours inside a
-// context word still come from `info`; they are in the text by definition.
-const rowOf = cur => (info && info[cur.char]) || (cur && cur.row) || null;
-
-// The sound parts this text carries for the characters in it (plan 12 Phase
-// 2a ships them; this reads them). Keyed for lookup rather than scanned, and
-// rebuilt only when the page changes.
-let headsOf = new Map(), headsForPage = null;
-function pageHeads() {
-  if (headsForPage !== page) {
-    headsForPage = page;
-    headsOf = new Map(((page && page.heads) || []).map(h => [h.char, h]));
-  }
-  return headsOf;
-}
+// `charRowFor` HAS NO CALLER, and that is deliberate (2026-09-25). Plan 12
+// built it for the injected sound part, and the injection was wound back with
+// the rest of what a learner could see; the capability is kept because the
+// standalone card viewer and the character search Mark listed as idea 1 want
+// exactly this, and because `p12-1` proves it still works. The same bargain
+// `prereq[]` has had since 9.2: shipped, knowingly unused, and cheaper to
+// keep than to rediscover.
 
 // ---------- the per-text cache ----------
 // The eviction cascade is gone (plan 8 Phase 2). It handled a full store by
