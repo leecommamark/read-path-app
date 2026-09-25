@@ -353,7 +353,21 @@ function meaningIndex() {
   // on every call, which was nothing while only a Learn batch called it and
   // is 252 scans of 307 once the due count does (plan 13 Phase 2).
   const rows = new Map(MEANING.tellapart.map(r => [r[0], r]));
-  return (MEANING.__ix = {cardable, needs, rows});
+  // character -> its family row, for the characters the DERIVATION question
+  // may be put about (plan 12 Phase 4). Two gates, and both are needed.
+  // `row[4]` is the build's: may this family ask at all — 斤 gives bing1 gan6
+  // jan1 kei4 si1 sik1 and never may. The syllable test is this one's: even
+  // inside a family that may ask, 青 is no clue to 靚 leng3 or 猜 caai1, and
+  // a question whose answer the method gets WRONG teaches the opposite of
+  // the method. What is left is the honest case — the part gives you the
+  // syllable — and the tone it cannot give you is what the question is for.
+  const derives = new Map();
+  for (const row of MEANING.tellapart) {
+    if (!row[4]) continue;
+    const hs = syllableOf(row[3]);
+    for (const m of row[2]) if (m[5] === hs) derives.set(m[0], row);
+  }
+  return (MEANING.__ix = {cardable, needs, rows, derives});
 }
 
 // The parts whose moment has come: a family that needs them holds a character
@@ -459,6 +473,21 @@ function semanticOf(ch) {
 // tell 清 from 晴, which is a fair question the moment you have seen both.
 // Derived by rebuildKnown, which walks the cards anyway — see `metChars`.
 const metChar = ch => metChars.has(ch);
+
+// a reading with its tone off — pathbuilder._syllable, which is what the
+// shipped `syllable` column on every family member was cut with
+const syllableOf = jp => (jp || '').replace(/\d+$/, '');
+
+// Has the learner met this character AS A PART — met it as a character, or
+// been given the meaning track's form-of card for it? The staged card (plan
+// 12 Phase 3) asks about 氵 辶 and the rest, which have no character card to
+// be met through and never will: plan 10 took them out of the learning order
+// precisely because 辶's "caang1" is a reading no dictionary attests. Met is
+// still the weak sense — a lapsed card counts, exactly as `metChar` has it —
+// because the card only says "you've seen this before", never that they know
+// it. `isPartKnown` is the strong one beside it and gates a quiz; this gates
+// a sentence.
+const metPart = ch => metChar(ch) || !!cards[partKey(ch)];
 
 // Has the meaning part been introduced? A squeezed shape is introduced by its
 // form-of card; a full character (木 言 女 虫) by being known as a character,
@@ -631,7 +660,7 @@ function noteWarm(id) {
 // that shares the character.
 const CARD_FIELDS = ['derived', 'components', 'phonetic', 'decomp', 'layout', 'cousins'];
 const PAYLOAD_ORDER = ['v', 'tokens', 'distinct', 'chars', 'families', 'lines',
-                       'normalized', 'script', 'prereq'];
+                       'normalized', 'script', 'prereq', 'heads'];
 const ROW_ORDER = ['char', 'reading', 'gloss', 'rank', 'count', 'readings',
                    'polyphonic', 'derived', 'components', 'phonetic', 'decomp',
                    'layout', 'family', 'type', 'src', 'src_class', 'cousins'];
@@ -649,40 +678,51 @@ function ordered(o, order) {
   return out;
 }
 
+// one row's card half into `charcards`, the rest returned — shared by chars
+// and heads (plan 12 Phase 2a) so the two cannot drift, mirroring
+// pathbuilder._split_row
+function splitRow(c, charcards) {
+  const card = {};
+  for (const k of CARD_FIELDS) if (k in c) card[k] = c[k];
+  const row = {};
+  for (const k of Object.keys(c)) if (!CARD_FIELDS.includes(k)) row[k] = c[k];
+  if (row.readings) row.readings = row.readings.map(r => {
+    const rr = {};
+    for (const k of Object.keys(r)) {
+      if (k === 'examples') (card.examples || (card.examples = {}))[r.jp] = r[k];
+      else rr[k] = r[k];
+    }
+    return rr;
+  });
+  charcards[keyOf(c.char, c.reading)] = card;
+  return row;
+}
+
 function splitPage(p) {
   const charcards = {}, core = {};
   for (const k of Object.keys(p)) if (k !== 'lines') core[k] = p[k];
-  core.chars = p.chars.map(c => {
-    const card = {};
-    for (const k of CARD_FIELDS) if (k in c) card[k] = c[k];
-    const row = {};
-    for (const k of Object.keys(c)) if (!CARD_FIELDS.includes(k)) row[k] = c[k];
-    if (row.readings) row.readings = row.readings.map(r => {
-      const rr = {};
-      for (const k of Object.keys(r)) {
-        if (k === 'examples') (card.examples || (card.examples = {}))[r.jp] = r[k];
-        else rr[k] = r[k];
-      }
-      return rr;
-    });
-    charcards[keyOf(c.char, c.reading)] = card;
-    return row;
-  });
+  core.chars = p.chars.map(c => splitRow(c, charcards));
+  // a head's card is keyed (char, reading) like any other, so it goes to the
+  // same bucket and is stored once however many texts need it
+  core.heads = (p.heads || []).map(c => splitRow(c, charcards));
   return {core, lines: {lines: p.lines}, charcards};
+}
+
+function joinRow(c, charcards) {
+  const card = {...(charcards[keyOf(c.char, c.reading)] || {})};
+  const examples = card.examples || {};
+  delete card.examples;
+  const row = {...c, ...card};
+  if (row.readings) row.readings = row.readings.map(r => ordered(
+    r.jp in examples ? {...r, examples: examples[r.jp]} : {...r}, READING_ORDER));
+  return ordered(row, ROW_ORDER);
 }
 
 function joinPage(core, lines, charcards) {
   const p = {};
   for (const k of Object.keys(core)) p[k] = core[k];
-  p.chars = core.chars.map(c => {
-    const card = {...(charcards[keyOf(c.char, c.reading)] || {})};
-    const examples = card.examples || {};
-    delete card.examples;
-    const row = {...c, ...card};
-    if (row.readings) row.readings = row.readings.map(r => ordered(
-      r.jp in examples ? {...r, examples: examples[r.jp]} : {...r}, READING_ORDER));
-    return ordered(row, ROW_ORDER);
-  });
+  p.chars = core.chars.map(c => joinRow(c, charcards));
+  p.heads = (core.heads || []).map(c => joinRow(c, charcards));
   p.lines = lines.lines;
   return ordered(p, PAYLOAD_ORDER);
 }
@@ -692,7 +732,7 @@ function joinPage(core, lines, charcards) {
 // a partial store costs the mnemonic block and the example words, not the card
 // (which is what lets the Due deck run without waiting for anything).
 function attachCharCards(p, charcards) {
-  for (const c of p.chars) {
+  for (const c of [...p.chars, ...(p.heads || [])]) {
     const card = charcards[keyOf(c.char, c.reading)];
     if (!card) continue;
     for (const k of CARD_FIELDS) if (k in card) c[k] = card[k];
@@ -751,8 +791,10 @@ function packCore(core) {
   };
   const out = {};
   for (const k of Object.keys(core))
-    if (k !== 'chars' && k !== 'families' && k !== 'prereq') out[k] = core[k];
+    if (k !== 'chars' && k !== 'families' && k !== 'prereq' && k !== 'heads')
+      out[k] = core[k];
   out.c = core.chars.map(row);
+  out.h = (core.heads || []).map(row);
   out.f = Object.entries(core.families).map(([k, v]) => [k, v.reading, v.gloss]);
   out.p = core.prereq.map(e => [e.char, e.jp, e.gloss, e.rank, e.why, e.for_]);
   return out;
@@ -771,11 +813,13 @@ function unpackCore(a) {
     return c;
   };
   const out = {};
-  for (const k of Object.keys(a)) if (k !== 'c' && k !== 'f' && k !== 'p') out[k] = a[k];
+  for (const k of Object.keys(a))
+    if (k !== 'c' && k !== 'f' && k !== 'p' && k !== 'h') out[k] = a[k];
   out.chars = a.c.map(row);
   out.families = Object.fromEntries(a.f.map(([k, r, g]) => [k, {reading: r, gloss: g}]));
   out.prereq = a.p.map(e => ({char: e[0], jp: e[1], gloss: e[2], rank: e[3],
                               why: e[4], for_: e[5]}));
+  out.heads = (a.h || []).map(row);
   return ordered(out, PAYLOAD_ORDER);
 }
 
@@ -987,6 +1031,62 @@ function writeCharCards(bucket) {
   // nothing unpacked can reach the store by another route
   for (const [k, card] of Object.entries(bucket))
     save('songpath.charcard.' + k, packCard(slimCard(card)));
+}
+
+// ---------- a card for a character in no text (plan 12 Phase 1) ----------
+// Every card renderer reads `info`, this text's character table, because until
+// now every card WAS in a text. Plan 12 puts 青 in front of a learner reading
+// a text that has 清 and no 青, and the search Mark wants would ask for any
+// character at all; both need a row built from nothing but the character.
+//
+// A SINGLE CHARACTER IS A TEXT, so this is `analyse()` and not a second path
+// into the tables. That buys three things worth more than the cycles it costs:
+// no new server route, no second copy of build_page's row assembly to drift
+// from the first, and a row whose SHAPE is provably the shape a real text
+// produces — which is what `p12-1c` checks. `analyse` is also already the door
+// that awaits `tablesReady` in device mode, so nothing here learns about
+// BUILD_MODE.
+//
+// What it strips is what the one-character text invented: `count` would say
+// "1× in this text" about a text the learner never opened, and each reading's
+// `in_text` and `line` would quote that same lone character back at them. The
+// plan's rule is that a text-free card differs from the same card in a text
+// only by the parts that belong to a text; this is that rule, applied once.
+const TEXT_SCOPED_ROW = ['count'];
+const TEXT_SCOPED_READING = ['in_text', 'line'];
+const standaloneRows = new Map();          // char -> row, for the session
+
+async function charRowFor(ch) {
+  if (standaloneRows.has(ch)) return standaloneRows.get(ch);
+  const p = await analyse(ch);             // library.js; one character of text
+  const row = (p.chars || []).find(c => c.char === ch);
+  if (!row) return null;                   // not a character the tables know
+  for (const k of TEXT_SCOPED_ROW) delete row[k];
+  for (const r of row.readings || [])
+    for (const k of TEXT_SCOPED_READING) delete r[k];
+  standaloneRows.set(ch, row);
+  return row;
+}
+
+// THE ROW A SURFACE SHOULD DRAW FROM. This text's table where the character
+// is in this text, and the item's own row where it is not — which since plan
+// 12 Phase 2b is an ordinary state rather than an edge one: a sound part is
+// put in front of a learner reading a text that does not contain it. Every
+// surface that reaches for the TARGET's readings goes through here, so none
+// of them has to know which kind of item it was handed. Neighbours inside a
+// context word still come from `info`; they are in the text by definition.
+const rowOf = cur => (info && info[cur.char]) || (cur && cur.row) || null;
+
+// The sound parts this text carries for the characters in it (plan 12 Phase
+// 2a ships them; this reads them). Keyed for lookup rather than scanned, and
+// rebuilt only when the page changes.
+let headsOf = new Map(), headsForPage = null;
+function pageHeads() {
+  if (headsForPage !== page) {
+    headsForPage = page;
+    headsOf = new Map(((page && page.heads) || []).map(h => [h.char, h]));
+  }
+  return headsOf;
 }
 
 // ---------- the per-text cache ----------

@@ -37,9 +37,15 @@ async function openChars() {
   renderCharList();
 }
 
+// Counted WITHIN the learning order, not `knownChars.size`. Since plan 12
+// Phase 2b a learner can hold a card for a character outside the 3,000 — a
+// sound part is pulled by demand and needs no rank — and the size of the set
+// would then have read "3,012 known of 3,000".
+const knownInOrder = () => charlist.filter(c => isKnownChar(c.char)).length;
+
 function renderCharList() {
   $('charStats').textContent =
-    `${knownChars.size} known of ${charlist.length} in the learning order.`;
+    `${knownInOrder()} known of ${charlist.length} in the learning order.`;
   $('charTokens').innerHTML = charlist.map(c => `
     <span class="token${isKnownChar(c.char) ? ' known' : ''}" data-char="${esc(c.char)}"
       data-jp="${esc(c.reading || '')}"
@@ -74,7 +80,7 @@ $('charTokens').onclick = e => {              // delegated: 3,000 tokens
   }
   el.classList.toggle('known', isKnownChar(ch));
   $('charStats').textContent =
-    `${knownChars.size} known of ${charlist.length} in the learning order.`;
+    `${knownInOrder()} known of ${charlist.length} in the learning order.`;
 };
 
 // placement: binary search on the learner's frontier, but forgiving — each

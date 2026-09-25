@@ -13,9 +13,12 @@
 var ANALYSIS = ANALYSIS || {};
 
 // Keep in sync with PAGE_V in pathbuilder.py and library.js.
-ANALYSIS.PAGE_V = 16;
+ANALYSIS.PAGE_V = 17;
 // How many "worth meeting first" rows the payload carries (PREREQ_MAX).
 ANALYSIS.PREREQ_MAX = 40;
+// How many characters of the text a sound part must explain to travel with it
+// (HEADS_MIN_SERVED in pathbuilder.py).
+ANALYSIS.HEADS_MIN_SERVED = 2;
 
 // ASYNC, AND THE TWO AWAITS ARE FORCED BY THE DATA. `words` and `cards` are
 // read by key from IndexedDB in the browser — 58 MB and 29.6 MB of heap if
@@ -73,6 +76,29 @@ async function buildPage(text) {
     for_: e.for_.slice(0, 6),
   }));
 
+  // THE SOUND PARTS THE TEXT DOES NOT CONTAIN (plan 12 Phase 2a), mirroring
+  // build_page's block of the same name. Code-point order, not JS's default
+  // UTF-16 order, for the reason familiesOf gives: they part company on an
+  // astral key and a phonetic can be one. A second warm pass, because which
+  // heads there are is only known once the chars rows carry their `phonetic`.
+  const inText = new Set(chars.map(c => c.char));
+  const served = new Map();
+  for (const c of chars) {
+    const h = c.phonetic;
+    if (h && h !== c.char && !inText.has(h))
+      served.set(h, (served.get(h) || 0) + 1);
+  }
+  const wanted = [...served.keys()]
+    .filter(h => served.get(h) >= A.HEADS_MIN_SERVED)
+    .sort(A.cmpCodePoint)
+    .map(h => ({h, row: A.charRow(h)}))
+    .filter(x => x.row && x.row.r && x.row.r.length)
+    .map(x => ({h: x.h, reading: x.row.r[0][0]}));
+  await A.warmCards(wanted.map(x => A.key(x.h, x.reading)));
+  const heads = wanted.map(x => A.buildCharRow(
+    {char: x.h, reading: x.reading, rank: A.rankOf(x.h), count: 0},
+    N.srcOf, R.ctxWords, winfo));
+
   return {
     v: A.PAGE_V,
     tokens: R.tokens,
@@ -83,5 +109,6 @@ async function buildPage(text) {
     normalized: N.normalized,
     script: N.script,
     prereq,
+    heads,
   };
 }

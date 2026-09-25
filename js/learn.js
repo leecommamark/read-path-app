@@ -3,6 +3,46 @@
 // ---------- learn: interleaved — present 5, quiz those 5, repeat ----------
 const BATCH = 5;
 let batch = [], learnI = 0;
+// How much of each card in the batch has been revealed (plan 12 Phase 3).
+// Per BATCH INDEX rather than per card, because it is a position in a
+// sequence and not knowledge — stepping back to card 1 must not make the
+// learner climb it again, and starting a new batch must start at the bottom.
+let shownTo = [];
+
+// THE SOUND PART AHEAD OF WHAT IT EXPLAINS (plan 12 Phase 2b). At most one
+// per batch and always first, for the reason MEANING_PER_BATCH is one: five
+// cards is the batch, and a batch that is mostly scaffolding is not a batch
+// of five characters any more.
+//
+// ONE RULE FOR BOTH CASES. The head may be in this text or not — on
+// prose_long, 272 of the 817 characters with a sound part have it beside them
+// and 545 do not — and the difference is only where its row comes from:
+// `info` for one, `page.heads` for the other, which the payload carries
+// (Phase 2a) so this costs no request and no await. An earlier attempt pulled
+// every in-text head to the front of the whole queue instead, which put
+// 也 小 者 幾 in front of 的 在 一 上 and threw away the readability ordering
+// that is the reason `unacquiredKeys` sorts at all. The queue keeps its
+// order; one card steps in front of it.
+function soundHeadItem(upcoming) {
+  const heads = pageHeads();
+  for (const k of upcoming) {
+    const row = info[k.char];
+    const head = row && row.phonetic;
+    if (!head || head === k.char || metChar(head)) continue;
+    // `for_` is the character in the text that earned it a place, which is
+    // what the card says instead of a count of a text it is not in
+    const inText = info[head];
+    if (inText) {
+      const jp = inText.reading;
+      if (!jp || isKnownKey(head, jp)) continue;
+      return {char: head, jp, head: true, inText: true, for_: k.char};
+    }
+    const hr = heads.get(head);
+    if (hr && hr.reading)
+      return {char: head, jp: hr.reading, row: hr, head: true, for_: k.char};
+  }
+  return null;
+}
 
 function startLearn() {
   $('quizbox').style.display = 'none';
@@ -14,7 +54,15 @@ function startLearn() {
   // needs it", and after the characters is not before them.
   const sound = pool.slice(0, BATCH - MEANING_PER_BATCH);
   const parts = meaningForBatch(sound.map(k => k.char), MEANING_PER_BATCH);
-  const rest = pool.slice(0, BATCH - parts.length);
+  // at most one injected head per batch, for the reason MEANING_PER_BATCH is
+  // one: five cards is the batch, and a batch that is mostly scaffolding is
+  // not a batch of five characters any more
+  const head = soundHeadItem(pool.slice(0, BATCH - parts.length));
+  // an in-text head is in the queue as well, so it must not appear twice
+  const queue = head && head.inText
+    ? pool.filter(k => !(k.char === head.char && k.jp === head.jp))
+    : pool;
+  const rest = queue.slice(0, BATCH - parts.length - (head ? 1 : 0));
   if (!pool.length && !parts.length) {
     for (const el of ['learnPhase', 'learnCard', 'learnNav'])
       $(el).style.display = 'none';
@@ -22,9 +70,12 @@ function startLearn() {
     return;
   }
   $('learnDone').style.display = 'none';
+  // meaning parts, then the sound head, then the characters. Both kinds are
+  // introduced just before what needs them, so both come before it.
   batch = [...parts.map(p => ({part: p})),
+           ...(head ? [head] : []),
            ...rest.map(k => ({char: k.char, jp: k.jp}))];
-  learnI = 0;
+  learnI = 0; shownTo = [];
   renderLearnCard();
 }
 
@@ -65,13 +116,9 @@ function renderLearnCard() {
       learnI === batch.length - 1 ? 'Quiz these →' : 'Next →';
     return;
   }
-  const c = info[cur.char];
-  // Pleco layout: one section per reading, the card's own reading first —
-  // each with its line from the text and dictionary words. A single-reading
-  // character is simply one section.
-  const all = c.readings || [{jp: c.reading, gloss: c.gloss, in_text: []}];
-  const secs = all.filter(r => !r.variant_of)
-    .sort((a, b) => (b.jp === cur.jp) - (a.jp === cur.jp));
+  // this text's row, or the item's own where it has none — an injected sound
+  // part is not in this text, and that is the ordinary case here
+  const c = rowOf(cur);
   // simplified-source pairing: near = same skeleton once radicals fold
   // (learn both at once), far = a genuinely different shape to remember
   const pair = c.src
@@ -80,16 +127,43 @@ function renderLearnCard() {
        ${c.src_class === 'near' ? 'near twin: learn both now'
                                 : 'far form: a separate thing to remember'}</div>`
     : '';
+  // ONE BEAT AT A TIME (plan 12 Phase 3). The character, its 簡 pairing and
+  // the line saying why this card is here are the HEADER — they say what the
+  // card is about, and withholding the glyph would make the parts beat a
+  // riddle rather than a step. The count moved up here from the foot of the
+  // old card for the same reason: on an injected sound part it reads "the
+  // sound part of 清 — not in this text", which is the answer to the first
+  // question the learner has and no use to them at the end. Everything that
+  // follows is revealed in order, by a cue that asks the question the beat
+  // answers. A card with nothing left to give shows no cue at all, which is
+  // every card once it is fully climbed.
+  const why = cur.head
+    ? `<div class="lc-count" lang="en">the sound part of ${esc(cur.for_ || '')
+       } — not in this text</div>`
+    : `<div class="lc-count">${c.count}× in this text</div>`;
+  const stages = cardStages(cur, c, false);
+  const shown = Math.min(Math.max(shownTo[learnI] || 1, 1), stages.length);
+  shownTo[learnI] = shown;
   $('learnCard').innerHTML = `
     <div class="lc-char">${esc(cur.char)}</div>
-    ${pair}
-    ${secs.map(r => readingSection(cur, r, c, false)).join('')}
-    ${mnemonicBlock(c)}
-    <div class="lc-count">${c.count}× in this text</div>
-    ${seriesBlock(c)}`;
+    ${pair}${why}
+    ${stages.slice(0, shown).map(s => `<div class="lc-stage">${s.html}</div>`).join('')}
+    ${shown < stages.length
+      ? `<button type="button" class="lc-more">${esc(stages[shown].cue)}</button>`
+      : ''}`;
+  const more = $('learnCard').querySelector('.lc-more');
+  if (more) more.onclick = revealStage;
   $('lPos').textContent = `${learnI + 1} / ${batch.length}`;
   $('lPrev').disabled = learnI === 0;
   $('lNext').textContent = learnI === batch.length - 1 ? 'Quiz these →' : 'Next →';
+}
+
+// the cue's own action. A named function rather than a closure over `shown`
+// because the cue is REBUILT on every render — it is inside the card's
+// innerHTML — and a headless check can call what the learner taps.
+function revealStage() {
+  shownTo[learnI] = (shownTo[learnI] || 1) + 1;
+  renderLearnCard();
 }
 
 $('lPrev').onclick = () => { if (learnI > 0) { learnI--; renderLearnCard(); } };
@@ -127,9 +201,12 @@ $('lKnow').onclick = () => {
   if (!cur) return;
   const key = itemKey(cur);
   const snap = {key, card: cards[key] ? {...cards[key]} : null,
-                batch: batch.slice(), learnI};
+                batch: batch.slice(), learnI, shownTo: shownTo.slice()};
   if (cur.part) knowPart(cur.part); else mintCard(key, MATURE_RUNG);
-  batch.splice(learnI, 1);
+  // how far each card is revealed is indexed by POSITION, so a card leaving
+  // the batch takes its position with it or every card after it inherits
+  // someone else's progress through the beats
+  batch.splice(learnI, 1); shownTo.splice(learnI, 1);
   const have = new Set(batch.map(itemKey));
   for (const k of unacquiredKeys()) {
     if (batch.length >= BATCH) break;
@@ -141,7 +218,7 @@ $('lKnow').onclick = () => {
                     : `${cur.char} ${cur.jp} marked known`, snap, s => {
     if (s.card) cards[s.key] = s.card; else delete cards[s.key];
     saveCards();
-    batch = s.batch; learnI = s.learnI;
+    batch = s.batch; learnI = s.learnI; shownTo = s.shownTo;
     renderLearnCard();
     updateMeter();
   });

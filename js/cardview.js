@@ -33,12 +33,25 @@ const FORMATION_NAMES = {
   simplified: 'simplified form',
 };
 function mnemonicBlock(c) {
-  const cap = FORMATION_NAMES[c.type];
+  const cap = formationCaption(c);
   const tree = decompTree(c.decomp);
   if (!cap && !tree) return '';
   // a caption alone (象形/指事 — nothing to decompose) still earns its line
-  return `${cap ? `<div class="dt-caption">${cap}</div>` : ''}${tree}${cousinLine(c)}`;
+  return `${cap}${tree}${cousinLine(c)}`;
 }
+
+// The caption on its own. The staged card (Phase 3) shows it a beat before
+// the tree it introduces — "how they sit together" precedes "which one is the
+// sound" — so the two halves of the mnemonic block are separable here rather
+// than duplicated there.
+const formationCaption = c =>
+  FORMATION_NAMES[c.type] ? `<div class="dt-caption">${FORMATION_NAMES[c.type]}</div>` : '';
+
+// `layout` is the server's word for how the parts are arranged — "left →
+// right", "outside → inside". It has never been drawn; the staged card is
+// where it belongs, because that beat is exactly the question it answers.
+const layoutLine = c =>
+  c.layout ? `<div class="dt-layout">${esc(c.layout)}</div>` : '';
 
 // Only when the server sent cousins: the phonetic's own reading is no clue to
 // this character's sound, so name the series members that are — "like 黨 dong2
@@ -84,7 +97,9 @@ function decompTree(d) {
 // component, and characters that take THIS character as their phonetic
 function seriesRows(list) {
   return list.map(s => {
-    const inText = s.char in info;
+    // `info` is this text's table and there may be no text: a card drawn for
+    // a character in none of them (plan 12 Phase 1) has nothing to be "in".
+    const inText = !!info && s.char in info;
     return `<div class="sr${inText ? ' intext' : ''}"><b>${esc(s.char)}</b>
       <span class="sr-jp">${esc(s.jp || '?')}</span>${esc(s.gloss || '')}${inText ? ' — in this text' : ''}</div>`;
   }).join('');
@@ -153,7 +168,9 @@ function contextLineHtml(r, due) {
   }
   const html = cells.slice(start, end).map((c, k) => {
     if (c.text) return `<span class="plain">${esc(c.ch)}</span>`;
-    const known = isKnownKey(c.char, cardJp(info[c.char], c.jp));
+    // same guard: a context line only exists where a text does, but this must
+    // not be the thing that throws if one is ever drawn without one
+    const known = isKnownKey(c.char, cardJp(info && info[c.char], c.jp));
     return `<span class="card${known ? ' known' : ''}${start + k === pos ? ' target' : ''}">
       <span class="c-jp">${esc(c.jp || '')}</span>
       <span class="c-char">${esc(c.ch)}</span></span>`;
@@ -169,7 +186,12 @@ function contextLineHtml(r, due) {
 // mnemonic block below. 變調 variants live inside their base reading's
 // section (their word evidence still comes from in_text — a variant has no
 // line of its own on the card).
-function readingSection(cur, r, c, due) {
+// `only` is the staged card's (Phase 3) — `'reading'` draws the jyutping and
+// the gloss alone, `'words'` the evidence alone, and an absent `only` the
+// whole section, which is what the quiz feedback card still asks for. One
+// function rather than two: the staged card is the same card revealed in
+// order, and a second copy of this markup is how the two would drift.
+function readingSection(cur, r, c, due, only) {
   const all = c.readings || [];
   const words = dictExamples(r).map(e =>
     `<span class="lc-w">${esc(e.word)} <span class="lc-exjp">${esc(e.jp)}</span></span>`).join('');
@@ -184,13 +206,19 @@ function readingSection(cur, r, c, due) {
     return `<div class="lc-var"><b>變調</b> changed tone <span class="lc-exjp">${esc(v.jp)}</span>${ws ? ` in ${ws}` : ''}</div>`;
   }).join('');
   const line = contextLineHtml(r, due);
+  const head = only !== 'words'
+    ? `<div class="lc-jp">${esc(r.jp || '?')}</div>
+       <div class="lc-gloss">${esc(r.gloss || '')}</div>` : '';
+  const body = only !== 'reading'
+    ? `${words ? `<div class="lc-label">Words using it</div>
+                  <div class="lc-words">${words}</div>` : ''}
+       ${line ? `<div class="lc-label">In the text</div>${line}` : ''}
+       ${vars}` : '';
+  // an empty box still draws its own-reading background, so a reading with
+  // no evidence contributes nothing to the evidence beat rather than a blank
+  if (!head.trim() && !body.trim()) return '';
   return `<div class="lc-reading${r.jp === cur.jp ? ' own' : ''}">
-    <div class="lc-jp">${esc(r.jp || '?')}</div>
-    <div class="lc-gloss">${esc(r.gloss || '')}</div>
-    ${words ? `<div class="lc-label">Words using it</div>
-               <div class="lc-words">${words}</div>` : ''}
-    ${line ? `<div class="lc-label">In the text</div>${line}` : ''}
-    ${vars}
+    ${head}${body}
   </div>`;
 }
 
@@ -252,4 +280,78 @@ function partCardHtml(row) {
         </span>`).join('')}</div>
       <div class="mc-marks" lang="en">marks ${row.marks} of your 3,000 characters</div>
     </div>`;
+}
+
+// ---------- the staged card (plan 12 Phase 3) ----------
+// The learn card handed over everything at once — the character, the 簡
+// pairing, every reading with its gloss, its dictionary words and its line,
+// the formation caption, the decomposition tree, the cousins, the count and
+// the series dropdowns. There were no steps to climb because it was all one
+// step, and Mark's complaint about the track ("acknowledging its existence is
+// not learning it") applies to a card as much as to a question.
+//
+// So the same card, revealed in order: the parts you have already met → how
+// they sit together → which part carries the sound and what it sounds like →
+// the reading → the character in a word. NOT a second card design — every
+// beat below is a piece this file already drew, moved rather than rewritten,
+// and a fully revealed staged card holds exactly what the old card held.
+//
+// An empty beat is dropped rather than shown blank, so the sequence is as
+// long as the character has something to say: 清 climbs all five, 人 — a
+// pictogram with nothing to decompose — has its caption, its reading and its
+// word, and the card is three beats rather than a wall with three holes.
+
+// Beat 1. The level-1 components, and WHICH OF THEM THE LEARNER HAS MET —
+// the whole staging rests on leading from what they have to what they have
+// not, so this is the beat that says where they are standing. It is also the
+// one that can lie: a part listed without qualification reads as a part they
+// know, so the two groups are labelled separately and the "you've met" label
+// is absent entirely when nothing has been.
+//
+// No readings here, met or not. That is beat 3's, and giving 青's cing1 away
+// in beat 1 would collapse the sequence into the wall it replaces.
+function partsRow(c) {
+  const kids = (c.decomp && c.decomp.children) || [];
+  // code points, not UTF-16 units — spread over a string iterates code points,
+  // and 16 of the sound parts in this plan are astral
+  const chars = [...new Set(kids.length ? kids.map(k => k.char)
+                                        : [...(c.components || '')])];
+  if (!chars.length) return '';
+  const group = (label, list, cls) => list.length
+    ? `<div class="lp-group"><span class="lp-label" lang="en">${label}</span>` +
+      list.map(ch => `<span class="lp-part${cls}">${esc(ch)}</span>`).join('') +
+      `</div>`
+    : '';
+  return `<div class="lc-parts">` +
+    group("you've met", chars.filter(metPart), ' met') +
+    group('new to you', chars.filter(ch => !metPart(ch)), '') +
+    `</div>`;
+}
+
+// The beats, in order, each with the cue that reveals it — the cue is the
+// learner's own question, because a button that says "Next" teaches nothing
+// and a button that asks where the sound is has already made the point.
+//
+// Beat 3 is the sound part under a 形聲 character. 606 of the 3,000 have no
+// sound part (decision 12-ii) and for those the SAME tree is the meaning
+// parts with their curated role-glosses, so only the cue changes: the card
+// stages on the meaning instead of the sound rather than losing the beat.
+function cardStages(cur, c, due) {
+  // the Pleco layout the learn card has always had: one section per reading,
+  // the card's own first. Staging splits each section in two — its reading on
+  // one beat, its evidence on the next — and does not change which sections
+  // there are or what order they come in.
+  const all = c.readings || [{jp: c.reading, gloss: c.gloss, in_text: []}];
+  const secs = all.filter(r => !r.variant_of)
+    .sort((a, b) => (b.jp === cur.jp) - (a.jp === cur.jp));
+  const sound = !!(c.decomp && c.decomp.phonetic);
+  const sec = only => secs.map(r => readingSection(cur, r, c, due, only)).join('');
+  return [
+    {cue: '', html: partsRow(c)},
+    {cue: 'How do they fit together?', html: formationCaption(c) + layoutLine(c)},
+    {cue: sound ? 'Which part gives the sound?' : 'What do the parts mean?',
+     html: decompTree(c.decomp) + cousinLine(c)},
+    {cue: 'What is the reading?', html: sec('reading')},
+    {cue: 'Show it in a word', html: sec('words') + seriesBlock(c)},
+  ].filter(s => s.html.trim());
 }
