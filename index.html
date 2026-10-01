@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- read-path-app's notice (patch plan 7B, Phase 5): songpath, the first
+     Read Path, has moved. publish.py `notice app` copies this folder (and
+     the new app's icons) into the read-path-app clone; 404.html is this
+     page again, for any old deep link. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F5F2">
+<title>Read Path has moved</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+<style>
+  :root { --page: #F3F5F2; --ink: #14201B; --muted: #4A5A53; --jade: #0E6E58; --on-jade: #FFFFFF; }
+  @media (prefers-color-scheme: dark) {
+    :root { --page: #0F1613; --ink: #E6EEEA; --muted: #A7B6AF; --jade: #5FC3A6; --on-jade: #0F1613; }
+  }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 32rem; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 20px 48px; }
+  h1 { font-size: 28px; line-height: 1.2; margin: 0 0 16px; }
+  p { margin: 0 0 16px; }
+  .note { color: var(--muted); font-size: 15px; }
+  a.go { display: block; text-align: center; padding: 14px 16px; border-radius: 10px;
+         background: var(--jade); color: var(--on-jade); font-weight: 600; text-decoration: none;
+         margin: 24px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Read Path has moved</h1>
+  <p>This version of Read Path is retired. The new one is at a new address, rebuilt from the
+     ground up: it teaches you to read the Cantonese you already speak, works offline, and keeps
+     everything on your phone.</p>
+  <a class="go" href="../readpath/">Open the new Read Path</a>
+  <p class="note">Progress from this version doesn’t carry over. If you added this page to your
+     home screen, you can delete it, then add the new Read Path from its own page.</p>
+</main>
+<script>
+// Clears what songpath kept on this device: its database and its
+// localStorage keys (songpath.*). The new app shares this origin, so its
+// own data (readpath, readpath-cache, readpath.*) is never touched. sw.js
+// clears songpath's caches.
+(function () {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('songpath.')) localStorage.removeItem(k);
+  } catch (e) { /* storage may be blocked: nothing to clear */ }
+  try { indexedDB.deleteDatabase('songpath'); } catch (e) { /* none */ }
+  // a worker still registered for this page's own folder goes too
+  if ('serviceWorker' in navigator) {
+    const here = new URL('./', location.href).href;
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      for (const r of regs) if (r.scope === here) r.unregister();
+    }).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
